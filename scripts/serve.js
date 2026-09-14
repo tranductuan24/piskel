@@ -131,7 +131,7 @@ const server = http.createServer((req, res) => {
   }
 });
 
-server.listen(PORT, 'localhost', () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`Piskel server running at http://localhost:${PORT}/`);
   if (!isTest) {
     console.log('Live reload: enabled (CSS hot-swap, JS auto-refresh)');
