@@ -236,6 +236,8 @@
 
       this.initTooltips_();
 
+      window.piskelAPI = pskl.api.create(this);
+
       $.subscribe(Events.EXTERNAL_PISKEL_READY, function () {
         const externalPiskel = window._externalPiskel;
         if (!externalPiskel) {

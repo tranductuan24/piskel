@@ -86,3 +86,10 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
+
+### Console / AI automation API
+
+The editor exposes `window.piskelAPI` for drawing, document/file operations,
+frames, layers, palettes, native tools, transformations and history.
+Run `piskelAPI.help()` in the browser console to discover commands.
+See [Console API documentation and examples](docs/console-api.md).
