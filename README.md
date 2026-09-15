@@ -1,8 +1,9 @@
-# Piskel
+# Piskel AI Fork
 
-[![E2E Tests](https://github.com/piskelapp/piskel/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/piskelapp/piskel/actions/workflows/ci.yml)
+> [!IMPORTANT]
+> This repository is a fork of the official [`piskelapp/piskel`](https://github.com/piskelapp/piskel) project; it is not the official Piskel distribution. The original editor and commit history remain credited to the upstream Piskel authors and contributors. **Fork-specific modifications are implemented primarily by AI coding agents from user-directed requirements**, then checked with the repository's automated lint, build, and test tooling.
 
-Piskel is a browser-based editor for pixel art, game sprites, and frame-by-frame animation. It powers [piskelapp.com](https://www.piskelapp.com).
+The underlying Piskel editor is a browser-based tool for pixel art, game sprites, and frame-by-frame animation. The official editor powers [piskelapp.com](https://www.piskelapp.com). This fork adds an expanded Console API and an in-app, JSON-only automation workflow intended for AI-assisted drawing.
 
 <img
   src="https://screenletstore.appspot.com/img/95aaa0f0-37a4-11e7-a652-7b8128ce3e3b.png"
@@ -65,7 +66,7 @@ Useful commands:
 
 Playwright requires its browser binary. Install it with `npx playwright install chromium` when it is not already available.
 
-See the [project wiki](https://github.com/piskelapp/piskel/wiki) for additional development and desktop-build information.
+See the [upstream Piskel wiki](https://github.com/piskelapp/piskel/wiki) for additional development and desktop-build information.
 
 ## Technology
 
@@ -75,12 +76,10 @@ Several interface icons come from [The Noun Project](https://thenounproject.com/
 
 ## Contributing
 
-Use [GitHub Issues](https://github.com/piskelapp/piskel/issues) for bug reports and feature requests.
+Use this fork's [GitHub Issues](https://github.com/tranductuan24/piskel/issues) for fork-specific bugs and feature requests. Report issues with the original editor to the [upstream project](https://github.com/piskelapp/piskel/issues) when appropriate.
 
-Small, focused fixes and documentation improvements are the easiest contributions to review. Large or complex fixes, major refactors, and user-experience changes are unlikely to be reviewed or merged because the project has limited maintenance capacity.
+Keep changes focused and reviewable. Whether written by a person or an AI coding agent, changes should pass lint, build, and the relevant automated tests before they are merged.
 
-## License
+## License and attribution
 
-Copyright 2017 Julian Descottes.
-
-Licensed under the [Apache License 2.0](LICENSE).
+The original Piskel project is copyright 2017 Julian Descottes and its contributors. This fork retains the upstream [Apache License 2.0](LICENSE).
