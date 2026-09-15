@@ -1,13 +1,22 @@
 ---
 name: piskel-console-ui
-description: Use when creating or editing Piskel pixel art; enforces an art brief, measured geometry, palette planning, safe Console UI command chains, visual QA, and refinement.
+description: Use when creating or editing Piskel pixel art; enforces chain-first Console UI execution, measured geometry, complete outline topology, palette planning, visual QA, and refinement.
 ---
 
 # Professional Piskel Drawing with Console UI
 
-Use the in-app **`>_ API`** panel as the primary interface. The goal is not merely to produce valid pixels: deliver deliberate, readable, polished pixel art backed by measured geometry, a controlled palette, deterministic commands, and visual review.
+Use the in-app **`>_ API`** panel in `chain` mode as the default interface. The goal is not merely to produce valid pixels: deliver deliberate, readable, polished pixel art backed by measured geometry, complete edge topology, a controlled palette, deterministic commands, and visual review.
 
-Do not start drawing immediately after reading the request. Do not submit a rough block-in, random pixel scatter, or a minimally recognizable icon as finished work.
+Do not start drawing immediately after reading the request. Do not submit a rough block-in, random pixel scatter, a minimally recognizable icon, or an object with missing contour segments as finished work. A missing intended top, bottom, side, corner, cap, or face-separation edge is a hard failure—not a minor polish issue.
+
+## Default execution policy
+
+- Open **`>_ API`** and keep **Command** set to `chain` by default.
+- Write planned drawing operations in the Console UI chain editor and execute them there.
+- Use multiple reviewed chain phases while developing; combine them into one reproducible chain only after validation.
+- Switch to one-command mode only for payloads that genuinely require multiline JSON, such as `document.write`, `frame.write`, or base64 import.
+- Use `window.piskelAPI` directly only for a real data dependency that chains cannot express.
+- Do not use DevTools, `eval`, private `pskl.*` mutation, or ad-hoc DOM drawing as a shortcut.
 
 ## Non-negotiable quality contract
 
@@ -19,12 +28,14 @@ For every nontrivial drawing, the agent MUST:
 4. Calculate the composition, subject bounds, anchors, symmetry, proportions, and frame plan.
 5. Define a small palette by visual role before assigning colors to pixels.
 6. Build from silhouette to volume to details, not details first.
-7. Use deterministic, organized Console UI command chains with explicit targets.
-8. Validate command names, JSON, indexes, dimensions, and coordinate bounds.
-9. Read back the resulting state/pixels and inspect the rendered image visually.
-10. Perform at least one deliberate cleanup/refinement pass after the first render.
-11. Verify animation timing and loop continuity when multiple frames are requested.
-12. Save or export only after all applicable quality gates pass.
+7. Define an outline policy and edge map for exterior, top, bottom, side, seam, and occluded edges.
+8. Reapply and audit the final contour after every fill, shading, detail, and overlap pass.
+9. Use deterministic, organized Console UI command chains with explicit targets.
+10. Validate command names, JSON, indexes, dimensions, and coordinate bounds.
+11. Read back the resulting state/pixels and inspect the rendered image visually.
+12. Perform at least one deliberate cleanup/refinement pass after the first render.
+13. Verify animation timing and loop continuity when multiple frames are requested.
+14. Save or export only after all applicable quality gates pass.
 
 Reason as deeply as needed, but record concise decisions, measurements, and checks rather than a stream-of-consciousness transcript.
 
@@ -39,12 +50,16 @@ A drawing is complete only when both categories pass.
 - Every coordinate is an integer inside the intended frame.
 - Shape extents and pixel arrays are within bounds.
 - Commands target explicit layers/frames where ambiguity is possible.
-- Readback confirms expected dimensions, metadata, colors, and key pixels.
+- Fill/shading commands do not overwrite protected outline pixels.
+- Every required exterior contour and visible face boundary is present after final compositing.
+- Readback confirms expected dimensions, metadata, colors, outline extrema, and key pixels.
 - No accidental palette, setting, selection, or current-frame state remains.
 
 ### Visual quality
 
-- The silhouette reads at 1× scale.
+- The silhouette reads at 1× scale and its intended exterior contour is continuous.
+- Topmost and bottommost visible forms are outlined according to the declared outline policy.
+- Visible top/front/side/bottom faces have deliberate, connected edge ownership with no accidental gaps.
 - Composition is balanced and important forms have breathing room.
 - Values separate subject, background, shadow, and focal details.
 - Lighting direction and material treatment are consistent.
@@ -62,6 +77,7 @@ Before completion, mark each applicable gate `PASS` with concrete evidence:
 | Geometry | Bounds, centers, anchors, proportions, and all extents calculated | Recalculate before drawing |
 | Palette | Every color has a role and useful value separation | Remove/replace colors |
 | Silhouette | Subject reads at 1× without interior detail | Redesign major masses |
+| Outline topology | Exterior loop, top/bottom extrema, corners, visible face seams, and occlusion transitions are complete | Repair contour and rerun outline audit |
 | Form/light | Shading follows one declared light model | Rebuild shadow/light planes |
 | Pixel craft | Clusters and contour steps are intentional; no obvious noise | Perform cluster cleanup |
 | Technical | Commands succeed and readback matches dimensions/pixels | Fix smallest failing phase |
@@ -124,8 +140,10 @@ Focal point: <highest-priority feature>
 Light: <direction, softness, material response>
 Subject bounds: <x0..x1, y0..y1>
 Major proportions: <head/body/item ratios or shape hierarchy>
+Outline policy: <full dark, colored, selective, thickness, allowed exceptions>
+Face/edge map: <top, front, side, bottom, shared seams, hidden edges>
 Palette roles: <outline, shadow, base, light, highlight, accents>
-Layers: <ordered bottom to top>
+Layers: <ordered bottom to top; include Outline layer if used>
 Frames/FPS: <count, timing, loop plan>
 Risks: <small details, clipping, readability, symmetry, etc.>
 ```
@@ -185,6 +203,9 @@ Before drawing, calculate and record:
 - Ground/contact line or motion anchor
 - Symmetry axis and any intentional asymmetry
 - Outline thickness and diagonal step rhythm
+- Topmost and bottommost occupied rows/columns and their protected contour pixels
+- Row spans or polygon vertices for every visible top/front/side/bottom face
+- Ownership of each shared face seam so it is drawn exactly once
 - Highlight/shadow regions based on the light direction
 - Animation offsets/rotations for every frame
 
@@ -234,7 +255,10 @@ Use semantic layers, ordered bottom to top. Typical structure:
 2 Main silhouette / body
 3 Foreground details / highlights
 4 Front effects (optional)
+5 Outline / ink repair (optional, always above the fills it protects)
 ```
+
+For a simple object, keep fill and outline on one layer and redraw protected contour pixels last. For a complex multi-face or multi-part object, use a dedicated top outline layer so later face fills cannot erase the contour. Do not place an outline layer below a fill/detail layer that is allowed to cover it.
 
 Do not create layers with no purpose. For small sprites, one object layer plus background may be enough.
 
@@ -258,20 +282,157 @@ Example offset table for a four-frame idle loop:
 
 Do not duplicate frames without an intentional hold or visible timing purpose.
 
-### Phase 7 — Build a professional command plan
+### Phase 7 — Engineer outline and face topology
+
+Treat outlines as planned geometry, not decoration added from memory. Before any fill command, classify every intended edge:
+
+| Edge class | Rule |
+| --- | --- |
+| Exterior silhouette | Must remain visible and connected unless the declared style explicitly uses a selective/lineless edge |
+| Top/bottom extremum | Must contain the planned cap/rim/terminal contour; never assume a side outline implies it |
+| Visible face seam | Draw exactly once with the chosen separator value |
+| Occlusion boundary | The front form owns the visible edge; remove the hidden rear edge |
+| Hidden/shared edge | Do not draw through the covering face/object |
+| Lit selective contour | May use a lighter outline color only when declared in the outline policy |
+| Contact edge | Deliberately choose outline, cast shadow, or merge—not accidental disappearance |
+
+#### Choose one outline policy
+
+Record one policy before drawing:
+
+1. **Full outline** — every exterior boundary pixel belongs to the allowed outline palette.
+2. **Colored outline** — exterior boundaries remain complete, but lit and shadow sides use declared dark/light outline colors.
+3. **Selective outline** — specific lit or contact segments may omit dark ink; every exception must be named in the art brief and still read against the background.
+4. **Lineless** — forms rely on value/color boundaries; this must be requested or deliberately chosen and must not be confused with missing pixels.
+
+If no policy is specified, default to a complete one-pixel colored/dark exterior outline. Do not silently switch to selective or lineless treatment to excuse a gap.
+
+#### Build an edge map
+
+For each visible component or face, record:
+
+```text
+Face/component: <name>
+Bounds/vertices or row spans: <calculated geometry>
+Exterior edges owned: <top, upper-left, upper-right, side, lower-left, lower-right, bottom>
+Visible seams owned: <face transitions>
+Edges hidden by: <front component/layer>
+Protected extrema: <top row, bottom row, left/right terminal pixels>
+Allowed outline colors: <exact #RRGGBB list>
+```
+
+For isometric or pseudo-3D objects, explicitly map top, front, side, and visible bottom/underside faces. A face is not complete merely because its interior color exists; its outer slopes, cap, corners, and shared seams must connect.
+
+#### Reserve scanline endpoints
+
+For a full one-pixel outline, plan every silhouette row as a span:
+
+```text
+y = row: xLeft .. xRight
+```
+
+- `xLeft` and `xRight` are protected contour pixels.
+- Fill only `xLeft + 1 .. xRight - 1` when the span has an interior.
+- A span one or two pixels wide may be entirely outline.
+- Adjacent row endpoints must connect according to the intended 4- or 8-connected contour rhythm.
+
+Perform the equivalent column check for top and bottom boundaries:
+
+```text
+x = column: yTop .. yBottom
+```
+
+- `yTop` and `yBottom` are protected.
+- The global topmost and bottommost occupied rows require explicit commands or explicit documented exceptions.
+- At diagonal caps, verify the terminal pixel/run connects to both neighboring slopes.
+
+This row/column reservation is mandatory for objects whose top or bottom outline has previously disappeared.
+
+#### Use overwrite-safe draw order
+
+Missing top/bottom outlines are commonly caused by drawing dark ink first and then painting face fills or highlights over it. Use this order:
+
+```text
+1. OUTLINE UNDERPAINT — establish silhouette/edge mask
+2. FACE FILLS — write only inside protected boundaries
+3. SHADOW AND LIGHT — remain inset unless intentionally coloring an exterior edge
+4. INTERNAL SEAMS — draw each visible face boundary once
+5. DETAILS / OVERLAPS — apply planned occlusion
+6. OUTLINE REPAIR — redraw all protected exterior and seam pixels after every overwrite-capable pass
+7. OUTLINE AUDIT — read rows/sparse pixels and inspect the rendered contour
+```
+
+For rectangular/block forms, an overwrite-safe pattern is:
+
+```text
+# Outer ink mass first
+draw.rect {"layer":1,"frame":0,"x":4,"y":3,"width":16,"height":18,"color":"#1b1f3a","fill":true}
+# Inset fill cannot touch top/bottom/side outline
+draw.rect {"layer":1,"frame":0,"x":5,"y":4,"width":14,"height":16,"color":"#5d7bd9","fill":true}
+# Final explicit repair after shading/details
+draw.line {"layer":1,"frame":0,"x1":4,"y1":3,"x2":19,"y2":3,"color":"#1b1f3a"}
+draw.line {"layer":1,"frame":0,"x1":4,"y1":20,"x2":19,"y2":20,"color":"#1b1f3a"}
+```
+
+For irregular top/bottom faces, use calculated row spans and `draw.pixels`/`draw.line` to restore the exact cap, slopes, corners, lower rim, and terminal pixels. Never repair only the left/right sides.
+
+#### Mandatory top/bottom face audit
+
+After all fills and details, inspect each object/component using `frame.read` on its transparent object/outline layer when possible:
+
+```text
+frame.read {"layer":1,"frame":0,"format":"rows"}
+frame.read {"layer":1,"frame":0,"format":"sparse"}
+```
+
+Check all of the following:
+
+- **Top extreme**: the first occupied row has the intended outline/cap pixels.
+- **Upper corners**: top edge connects to both side slopes without a one-pixel gap.
+- **Face seam**: top-to-front or top-to-side transition is continuous and drawn once.
+- **Left/right sides**: every row transition remains connected.
+- **Lower corners**: side contours connect to the bottom slopes/rim.
+- **Bottom extreme**: the last occupied row contains the planned terminal outline pixels.
+- **Contact/underside**: any omitted bottom segment is justified by cast shadow, ground contact, or occlusion—not an overwrite.
+- **Composite result**: a higher layer has not covered an edge that should remain visible.
+
+For a full-outline style, derive the silhouette mask from nontransparent object pixels. Any occupied pixel adjacent to transparent/background space is a boundary pixel and must use one of the declared outline colors. Pay special attention to the global `minY`, `maxY`, `minX`, and `maxX` boundary sets.
+
+A contour passes only when it forms the intended continuous loop under the chosen connectivity. Intentional holes, openings, contact merges, and selective-outline exceptions must be recorded; unexplained gaps fail the gate.
+
+#### Common outline failures and required correction
+
+| Failure | Typical cause | Required correction |
+| --- | --- | --- |
+| Missing top rim/cap | Interior fill or highlight reused `yTop` | Inset fill and redraw the complete top run last |
+| Missing bottom rim | Shadow/background/ground overwrote `yBottom` | Assign edge ownership and redraw bottom terminal pixels after shadows |
+| Broken upper/lower corner | Diagonal row spans do not meet | Recalculate endpoint progression and add the connecting pixel |
+| One face looks detached | Shared seam omitted or split across layers | Assign one face as seam owner and draw one continuous separator |
+| Double-thick seam | Both adjacent faces drew the same boundary | Keep only one seam owner |
+| Outline disappears on lit side | Highlight touches exterior unintentionally | Inset highlight or use a declared lighter outline color |
+| Rear outline shows through | Hidden edge drawn before front occluder | Remove the hidden segment; let the front form own the boundary |
+| Outline vanishes only in composite | Higher layer overlaps it | Move/repair outline on a higher layer or correct overlap geometry |
+| Flood fill leaks through a face | Outline loop had a gap before `draw.fill` | Close/audit the boundary first, then verify the fill seed and result |
+| Bottom merges into background | Outline and background have insufficient contrast | Use a darker/lighter outline role or deliberate cast shadow |
+
+Do not proceed to final export while any unexplained outline gap remains.
+
+### Phase 8 — Build a professional command plan
 
 Organize commands broad-to-fine:
 
 1. Create or inspect the document.
 2. Create/select semantic layers and frames.
 3. Clear or establish the background.
-4. Draw the outer silhouette and largest masses.
-5. Add interior base-color planes.
+4. Draw the outline underpaint, outer silhouette, and largest masses.
+5. Add inset interior base-color planes without touching protected contour pixels.
 6. Add cast/form shadows according to the declared light.
-7. Add highlights and material cues.
+7. Add highlights and material cues without accidentally erasing lit-side edges.
 8. Add facial/focal details and controlled accents.
-9. Clean contours and isolated pixels.
-10. Append verification reads.
+9. Apply planned overlaps and remove hidden edges.
+10. Redraw the final top, bottom, side, corner, seam, and terminal outline pixels.
+11. Run the outline topology audit and clean isolated pixels.
+12. Append verification reads.
 
 Prefer primitives for coherent large forms:
 
@@ -285,7 +446,7 @@ Prefer primitives for coherent large forms:
 
 Do not emulate a large rectangle with hundreds of individual pixels. Do not use a primitive when its geometry produces a visibly crude result that needs hand-tuned clusters.
 
-### Phase 8 — Preflight the code
+### Phase 9 — Preflight the code
 
 Before selecting **Run**, verify every chain line:
 
@@ -295,6 +456,11 @@ Before selecting **Run**, verify every chain line:
 - Every `layer` and `frame` index exists at that point in the sequence.
 - Every rectangle/ellipse fits: `x + width <= W`, `y + height <= H`.
 - Every line endpoint and every explicit pixel is inside the frame.
+- Top/bottom extrema, face vertices, row-span endpoints, corners, and seam ownership match the edge map.
+- Every fill/shadow/highlight touching a protected boundary is intentional; otherwise it is inset.
+- Every `draw.fill` seed is inside the intended closed region, and the outline has no leak before the fill runs.
+- The final outline-repair commands occur after all commands capable of overwriting those pixels.
+- Higher-layer overlaps cover only edges classified as hidden/occluded.
 - `draw.pixels` has no accidental duplicate coordinates; later duplicates would silently overwrite earlier intent.
 - Colors are valid full hex values or `transparent`.
 - Creation commands precede commands that depend on their layers/frames.
@@ -303,7 +469,7 @@ Before selecting **Run**, verify every chain line:
 
 Use **Format chain** as a syntax/registry preflight. Formatting does not validate each command's semantic bounds, so the coordinate audit is still required.
 
-### Phase 9 — Execute in visual passes
+### Phase 10 — Execute in visual passes
 
 For nontrivial work, do not write one enormous unreviewed chain. Use controlled passes:
 
@@ -323,9 +489,13 @@ Add only details that improve identity, scale, expression, or focus. Clean the c
 
 Apply the planned motion to each frame, then compare silhouettes, volume, anchors, and loop timing.
 
+#### Pass E: outline repair and closure
+
+After every overwrite-capable pass, redraw the protected top/bottom extrema, slopes, corners, exterior sides, visible face seams, and contact edges. Audit both the object layer and final composite; repeat this pass independently for every animation frame.
+
 After iteration, the validated final chain may combine the passes into one reproducible run. During development, phased verification is safer than repeatedly running a giant partially failing chain.
 
-### Phase 10 — Verify structurally
+### Phase 11 — Verify structurally
 
 Append read commands to every mutation pass:
 
@@ -341,6 +511,8 @@ Verify:
 - Expected dimensions, layers, frames, and FPS
 - Expected current/target layer and frame
 - Key boundary pixels and palette colors
+- Every topmost/bottommost/leftmost/rightmost silhouette boundary matches the declared outline palette or documented exception
+- Top/front/side/bottom face seams connect without gaps or accidental double thickness
 - Subject bounds do not touch unintended edges
 - Transparent areas remain transparent
 - No command unexpectedly altered another frame/layer
@@ -348,7 +520,7 @@ Verify:
 
 A resolved command is not sufficient proof of a correct drawing.
 
-### Phase 11 — Inspect visually and refine
+### Phase 12 — Inspect visually and refine
 
 Inspect the actual rendered art, not just JSON:
 
@@ -361,6 +533,10 @@ For browser automation, capture and inspect a screenshot after each major pass. 
 
 Mandatory cleanup questions:
 
+- Is the topmost visible cap/rim fully connected to both side contours?
+- Is the bottommost visible rim/terminal run present and connected?
+- Did any fill, highlight, shadow, foreground part, or higher layer overwrite a required outline pixel?
+- Is each visible top/front/side/bottom face separated by exactly the intended seam?
 - Can any isolated pixel be merged into a stronger cluster or removed?
 - Are diagonal step lengths intentional and consistent?
 - Are there accidental tangents where forms barely touch?
@@ -378,6 +554,10 @@ Make at least one targeted refinement pass for any nontrivial drawing. Do not de
 ### Silhouette first
 
 A recognizable outer shape is more important than interior detail. If the subject does not read as a flat silhouette, revise proportions before shading.
+
+### Close and protect the outline
+
+For outlined styles, treat the final exterior contour as a protected mask. Reapply it after face fills, lighting, details, and overlaps. Audit the top and bottom independently; side contours alone do not prove a closed silhouette. A lit colored edge is valid only when it is intentional, connected, and listed in the outline palette.
 
 ### Build clusters, not noise
 
@@ -410,21 +590,30 @@ A final chain should read like maintained source code:
 ```text
 # ART: 24x24 front-view crystal icon, transparent background
 # GEOMETRY: bbox=(4,2)..(19,20), center axis=11.5, light=top-left
+# OUTLINE: full 1px colored outline; top=(11..12,2), bottom=(11..12,20); no open edges
+# FACES: top/front/side row spans calculated separately; each shared seam has one owner
 # PALETTE: outline=#1b1f3a shadow=#3b4f9f base=#5d7bd9 light=#8fb8ff highlight=#e8f7ff
 
 # SETUP
 document.new {"name":"Crystal","width":24,"height":24,"fps":8,"frameCount":1,"layerNames":["Crystal"]}
 
-# SILHOUETTE
-# <calculated shape commands>
+# OUTLINE UNDERPAINT / SILHOUETTE
+# <complete calculated exterior mass, including top and bottom terminal runs>
+
+# INSET FACE FILLS
+# <fills stop inside protected scanline/column endpoints>
 
 # VOLUME
 # <shadow, base, and light commands>
 
 # FOCAL DETAILS AND CLEANUP
-# <small intentional clusters and contour corrections>
+# <small intentional clusters and planned occlusion>
 
-# VERIFICATION
+# FINAL OUTLINE REPAIR — MUST FOLLOW EVERY OVERWRITE-CAPABLE COMMAND
+# <redraw top rim, both upper corners, side slopes, lower corners, bottom rim, and visible face seams>
+
+# OUTLINE + STATE VERIFICATION
+frame.read {"layer":0,"frame":0,"format":"rows"}
 frame.read {"layer":0,"frame":0,"format":"sparse"}
 document.colors
 app.state
@@ -439,6 +628,10 @@ Code requirements:
 - Specify `layer` and `frame` explicitly in reusable/final chains.
 - Keep colors consistent and lowercase.
 - Group commands by pass and visual purpose.
+- Encode the outline policy, edge ownership, protected extrema, and face geometry in comments.
+- Keep interior fills inset from full-outline boundaries.
+- Place final outline repair after all face fills, shadows, highlights, details, and overlaps.
+- Verify top and bottom contour runs explicitly in every relevant frame.
 - Avoid hidden dependence on the currently selected tool/layer/frame.
 - Avoid redundant writes and accidental overwrite ordering.
 - Use the smallest clear command set, not code golf and not command spam.
@@ -509,6 +702,7 @@ Before completion, confirm:
 - Key poses are distinct and readable.
 - Motion follows an intentional arc or displacement table.
 - Body/object volume does not unintentionally grow or shrink.
+- Exterior outline, top/bottom caps, corners, and visible face seams remain complete in every frame.
 - Feet, contact points, or attachment anchors do not slide accidentally.
 - Secondary motion follows primary motion with believable delay.
 - Frame timing supports the action; holds are intentional.
@@ -524,9 +718,10 @@ Report concise evidence, not a vague “done”:
 Completed: <subject and action>
 Canvas: <W×H>, <layers>, <frames at FPS>
 Palette: <count and key roles>
-Geometry: <subject bounds and anchors>
-Passes: silhouette, volume, details, cleanup, animation (as applicable)
-Verification: <state/pixel checks performed>
+Geometry: <subject bounds, anchors, face vertices/row spans>
+Outline: <policy; top/bottom extrema; seam ownership; closure audit result>
+Passes: silhouette, face fills, volume, details, outline repair, cleanup, animation (as applicable)
+Verification: <state/pixel/boundary checks performed>
 Visual review: <1×, zoom, backgrounds, loop checks>
 Export/save: <performed or intentionally not performed>
 Remaining limitation: <none or explicit issue>
