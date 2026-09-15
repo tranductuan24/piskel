@@ -298,6 +298,23 @@
     return items;
   };
 
+  ns.ConsoleController.prototype.formatChain_ = function (source) {
+    var items = this.parseChain_(source);
+    var itemIndex = 0;
+    return source
+      .split(/\r?\n/)
+      .map(function (rawLine) {
+        var line = rawLine.trim();
+        if (!line || line.charAt(0) === "#") {
+          return line;
+        }
+        var item = items[itemIndex++];
+        return item.command + " " + JSON.stringify(item.args);
+      })
+      .join("\n")
+      .trim();
+  };
+
   ns.ConsoleController.prototype.parseArgs_ = function (command) {
     var source = this.argsInput.value.trim();
     if (command === "chain") {
@@ -560,12 +577,7 @@
     var command = this.commandInput.value.trim();
     try {
       if (command === "chain") {
-        var items = this.parseChain_(this.argsInput.value.trim());
-        this.argsInput.value = items
-          .map(function (item) {
-            return item.command + " " + JSON.stringify(item.args);
-          })
-          .join("\n");
+        this.argsInput.value = this.formatChain_(this.argsInput.value.trim());
         this.setStatus_("Command chain formatted", "ready");
       } else {
         var value = JSON.parse(this.argsInput.value.trim() || "{}");

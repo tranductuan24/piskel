@@ -428,6 +428,10 @@ frame.read
   assert.equal(chain.length, 3);
   assert.equal(chain[0].command, "document.new");
   assert.deepEqual(JSON.parse(JSON.stringify(chain[2].args)), {});
+  assert.equal(
+    controller.formatChain_("# Geometry\napp.state;\n\nframe.read"),
+    "# Geometry\napp.state {}\n\nframe.read {}"
+  );
 
   const output = await controller.executeChain_(chain);
   assert.equal(output.count, 3);

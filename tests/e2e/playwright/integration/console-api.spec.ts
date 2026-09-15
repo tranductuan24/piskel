@@ -334,7 +334,7 @@ test("built-in Console API panel runs command chains, errors and live events", a
     ].join("\n")
   );
   await page.locator(".console-format").click();
-  await expect(args).not.toHaveValue(/# Create/);
+  await expect(args).toHaveValue(/# Create and verify/);
   await expect(args).not.toHaveValue(/;/);
 
   await args.press(

@@ -46,7 +46,7 @@ Rules:
 - Commands run in order and stop at the first runtime/validation error
 - A failed chain does not roll back commands that already completed
 
-The **Format chain** button removes comments and optional semicolons, then normalizes each line. Use **Chain example** to restore a safe, read-only sample.
+The **Format chain** button preserves comment/blank lines, removes optional semicolons, and normalizes each command line. Use **Chain example** to restore a safe, read-only sample.
 
 A successful chain returns:
 
