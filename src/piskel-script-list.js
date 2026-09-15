@@ -139,6 +139,7 @@ exports.scripts = [
   "js/controller/settings/resize/DefaultSizeController.js",
   "js/controller/settings/SaveController.js",
   "js/controller/settings/ImportController.js",
+  "js/controller/settings/ConsoleController.js",
 
   // Settings controller
   "js/controller/settings/SettingsController.js",

@@ -12,6 +12,7 @@ exports.styles = [
   "css/forms.css",
   "css/settings.css",
   "css/settings-application.css",
+  "css/settings-console.css",
   "css/settings-export.css",
   "css/settings-import.css",
   "css/settings-resize.css",

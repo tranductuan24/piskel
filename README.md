@@ -47,6 +47,15 @@ There is no support for mobile.
 
 Offline builds are available. More details in the [dedicated wiki page](https://github.com/piskelapp/piskel/wiki/Desktop-applications).
 
+### Console / AI automation API
+
+The editor exposes `window.piskelAPI` v2 for complete drawing/file state,
+app settings, drawing, import/export, persistence, frames, layers, palettes,
+native tools, selections, transformations, view/UI control and live events.
+Open the built-in **`>_ API`** panel to run commands without DevTools, or use
+`piskelAPI.help()` / `piskelAPI.capabilities()` from browser automation. See the
+[Console API documentation and examples](docs/console-api.md).
+
 ## Contributing ?
 
 ### Reporting an issue
@@ -85,11 +94,3 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-
-
-### Console / AI automation API
-
-The editor exposes `window.piskelAPI` for drawing, document/file operations,
-frames, layers, palettes, native tools, transformations and history.
-Run `piskelAPI.help()` in the browser console to discover commands.
-See [Console API documentation and examples](docs/console-api.md).

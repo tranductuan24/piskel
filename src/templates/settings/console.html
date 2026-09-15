@@ -1,0 +1,74 @@
+<script type="text/html" id="templates/settings/console.html">
+  <section class="settings-console" data-test-id="console-panel" aria-label="Piskel Console API">
+    <header class="console-header">
+      <div>
+        <h2 class="console-title">Console API</h2>
+        <p class="console-subtitle">Run every Piskel API command without opening DevTools. Input is JSON only; arbitrary JavaScript is never evaluated.</p>
+      </div>
+      <div class="console-status" data-test-id="console-status" role="status" aria-live="polite">Starting…</div>
+    </header>
+
+    <div class="console-presets" aria-label="Quick commands">
+      <button type="button" class="button console-preset" data-console-command="app.state" data-console-args='{}'>App state</button>
+      <button type="button" class="button console-preset" data-console-command="app.snapshot" data-console-args='{"includePixels":"all","pixelFormat":"uint32","includeSerialized":true,"includePalettes":true}'>Full snapshot</button>
+      <button type="button" class="button console-preset" data-console-command="document.read" data-console-args='{"pixels":"all","format":"rows"}'>Document</button>
+      <button type="button" class="button console-preset" data-console-command="settings.read" data-console-args='{}'>Settings</button>
+      <button type="button" class="button console-preset" data-console-command="help" data-console-args='{}'>Commands</button>
+    </div>
+
+    <div class="console-editor" data-test-id="console-editor">
+      <div class="console-command-row">
+        <label for="console-command-input">Command</label>
+        <input
+          id="console-command-input"
+          class="textfield console-command-input"
+          data-test-id="console-command-input"
+          list="console-command-list"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="app.state"
+        />
+        <datalist id="console-command-list"></datalist>
+        <button type="button" class="button console-history-previous" title="Previous command" aria-label="Previous command">↑</button>
+        <button type="button" class="button console-history-next" title="Next command" aria-label="Next command">↓</button>
+      </div>
+
+      <div class="console-command-help" data-test-id="console-command-help">
+        Select a command to see its argument schema.
+      </div>
+
+      <label class="console-args-label" for="console-args-input">Arguments (JSON object; use a JSON array with the pseudo-command <code>batch</code>)</label>
+      <textarea
+        id="console-args-input"
+        class="console-args-input allow-user-select"
+        data-test-id="console-args-input"
+        autocomplete="off"
+        autocapitalize="off"
+        spellcheck="false"
+        aria-label="Command arguments as JSON"
+      >{}</textarea>
+
+      <div class="console-editor-actions">
+        <button type="button" class="button button-primary console-run" data-test-id="console-run">Run <span class="console-key-hint">Ctrl/⌘ + Enter</span></button>
+        <button type="button" class="button console-format">Format JSON</button>
+        <button type="button" class="button console-clear-input">Reset input</button>
+        <label class="console-follow-label" title="Append public API change events to the output">
+          <input type="checkbox" class="console-follow-events" /> Follow changes
+        </label>
+      </div>
+    </div>
+
+    <div class="console-output-section">
+      <div class="console-output-toolbar">
+        <span class="console-output-title">Output</span>
+        <span class="console-output-count">0 entries</span>
+        <div class="console-output-actions">
+          <button type="button" class="button console-copy-output" disabled>Copy latest</button>
+          <button type="button" class="button console-download-output" disabled>Download</button>
+          <button type="button" class="button console-clear-output">Clear</button>
+        </div>
+      </div>
+      <div class="console-output allow-user-select" data-test-id="console-output" role="log" aria-live="polite" aria-relevant="additions"></div>
+    </div>
+  </section>
+</script>

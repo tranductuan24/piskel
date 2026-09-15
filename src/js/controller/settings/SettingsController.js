@@ -18,6 +18,10 @@
       template: "templates/settings/import.html",
       controller: ns.ImportController
     },
+    console: {
+      template: "templates/settings/console.html",
+      controller: ns.ConsoleController
+    },
     localstorage: {
       template: "templates/settings/localstorage.html",
       controller: ns.LocalStorageController
@@ -94,6 +98,10 @@
   };
 
   ns.SettingsController.prototype.loadSetting_ = function (setting) {
+    this.settingsContainer.classList.toggle(
+      "console-expanded",
+      setting === "console"
+    );
     this.drawerContainer.innerHTML = pskl.utils.Template.get(
       settings[setting].template
     );
@@ -127,6 +135,7 @@
   ns.SettingsController.prototype.closeDrawer_ = function () {
     pskl.utils.Dom.removeClass(SEL_SETTING_CLS);
     this.settingsContainer.classList.remove(EXP_DRAWER_CLS);
+    this.settingsContainer.classList.remove("console-expanded");
 
     this.isExpanded = false;
     this.currentSetting = null;
