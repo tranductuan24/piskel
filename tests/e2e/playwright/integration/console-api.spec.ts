@@ -304,7 +304,7 @@ test("Console API v2 selection clipboard and browser persistence are determinist
   expect(result.clipboardCount).toBe(2);
 });
 
-test("built-in Console API panel runs commands, batches, errors and live events", async ({
+test("built-in Console API panel runs command chains, errors and live events", async ({
   page
 }) => {
   await page.getByTestId("console-settings-button").click();
@@ -321,38 +321,31 @@ test("built-in Console API panel runs commands, batches, errors and live events"
   const run = page.getByTestId("console-run");
   const output = page.getByTestId("console-output");
 
-  await command.fill("document.new");
-  await args.fill(
-    JSON.stringify({
-      width: 5,
-      height: 3,
-      name: "Made in UI console",
-      layerNames: ["Pixels"]
-    })
-  );
-  await run.click();
-  await expect(output.locator(".console-output-success").last()).toContainText(
-    "document.new"
-  );
-  await expect(page.getByTestId("console-status")).toContainText(
-    /Completed document\.new/
-  );
+  await expect(command).toHaveValue("chain");
+  await expect(args).toHaveValue(/app\.state \{\}/);
 
-  await command.fill("batch");
   await args.fill(
-    JSON.stringify([
-      {
-        command: "draw.pixels",
-        args: { pixels: [{ x: 2, y: 1, color: "#abcdef" }] }
-      },
-      { command: "settings.set", args: { key: "GRID_ENABLED", value: true } }
-    ])
+    [
+      "# Create and verify a document in one run.",
+      'document.new {"width":5,"height":3,"name":"Made in UI console","layerNames":["Pixels"]};',
+      'draw.pixels {"pixels":[{"x":2,"y":1,"color":"#abcdef"}]}',
+      'settings.set {"key":"GRID_ENABLED","value":true}',
+      "app.state"
+    ].join("\n")
   );
+  await page.locator(".console-format").click();
+  await expect(args).not.toHaveValue(/# Create/);
+  await expect(args).not.toHaveValue(/;/);
+
   await args.press(
     process.platform === "darwin" ? "Meta+Enter" : "Control+Enter"
   );
-  await expect(output.locator(".console-output-success").last()).toContainText(
-    "batch"
+  const chainOutput = output.locator(".console-output-success").last();
+  await expect(chainOutput).toContainText("chain");
+  await expect(chainOutput).toContainText('"count": 4');
+  await expect(chainOutput).toContainText('"command": "document.new"');
+  await expect(page.getByTestId("console-status")).toContainText(
+    /Completed chain/
   );
 
   expect(
@@ -374,6 +367,16 @@ test("built-in Console API panel runs commands, batches, errors and live events"
     grid: true,
     pixel: "#abcdef"
   });
+
+  await command.fill("chain");
+  await args.fill("app.state {}\ndraw.missing {}");
+  await run.click();
+  await expect(output.locator(".console-output-error").last()).toContainText(
+    "Chain line 2: unknown command draw.missing"
+  );
+  await expect(page.getByTestId("console-status")).toContainText(
+    "Invalid command chain"
+  );
 
   await page.locator(".console-follow-events").check();
   await page.evaluate(() =>

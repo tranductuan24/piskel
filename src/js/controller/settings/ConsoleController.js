@@ -5,7 +5,20 @@
   var MAX_HISTORY_ENTRY_LENGTH = 20000;
   var MAX_OUTPUT_ENTRIES = 100;
   var MAX_VISIBLE_OUTPUT_LENGTH = 250000;
+  var DEFAULT_CHAIN = [
+    "# One command per line. Add an optional one-line JSON object.",
+    "app.state {}",
+    "document.colors {}",
+    "settings.read {}"
+  ].join("\n");
+  var CHAINABLE_HELPERS = ["help", "capabilities", "whenIdle", "waitForChange"];
   var PSEUDO_COMMANDS = [
+    {
+      command: "chain",
+      args: 'command[.name] {"optional":"JSON arguments"} · one command per line',
+      description:
+        "Run several registered commands sequentially with one click."
+    },
     {
       command: "help",
       args: "{filter?}",
@@ -37,6 +50,7 @@
     this.api = null;
     this.help = [];
     this.helpByCommand = Object.create(null);
+    this.registeredCommands = Object.create(null);
     this.history = [];
     this.historyIndex = 0;
     this.latestOutput = null;
@@ -56,6 +70,8 @@
     this.argsInput = this.root.querySelector(".console-args-input");
     this.commandList = this.root.querySelector("#console-command-list");
     this.commandHelp = this.root.querySelector(".console-command-help");
+    this.inputLabel = this.root.querySelector(".console-input-label");
+    this.formatButton = this.root.querySelector(".console-format");
     this.status = this.root.querySelector(".console-status");
     this.runButton = this.root.querySelector(".console-run");
     this.output = this.root.querySelector(".console-output");
@@ -75,6 +91,7 @@
     this.help.forEach(
       function (item) {
         this.helpByCommand[item.command] = item;
+        this.registeredCommands[item.command] = true;
       }.bind(this)
     );
     PSEUDO_COMMANDS.forEach(
@@ -89,11 +106,7 @@
     this.addEventListener(this.commandInput, "input", this.onCommandInput_);
     this.addEventListener(this.commandInput, "change", this.onCommandInput_);
     this.addEventListener(this.argsInput, "keydown", this.onEditorKeydown_);
-    this.addEventListener(
-      this.root.querySelector(".console-format"),
-      "click",
-      this.onFormatJson_
-    );
+    this.addEventListener(this.formatButton, "click", this.onFormatInput_);
     this.addEventListener(
       this.root.querySelector(".console-clear-input"),
       "click",
@@ -128,7 +141,7 @@
       }.bind(this)
     );
 
-    this.setInput_("app.state", "{}");
+    this.setInput_("chain", DEFAULT_CHAIN);
     this.setStatus_(
       "Ready · v" + this.api.version + " · " + this.help.length + " commands",
       "ready"
@@ -155,6 +168,7 @@
   };
 
   ns.ConsoleController.prototype.onCommandInput_ = function () {
+    this.updateInputMode_();
     this.updateCommandHelp_();
   };
 
@@ -184,12 +198,32 @@
   ns.ConsoleController.prototype.setInput_ = function (command, args) {
     this.commandInput.value = command;
     this.argsInput.value = args;
+    this.updateInputMode_();
     this.updateCommandHelp_();
+  };
+
+  ns.ConsoleController.prototype.updateInputMode_ = function () {
+    var isChain = this.commandInput.value.trim() === "chain";
+    this.root.dataset.inputMode = isChain ? "chain" : "command";
+    this.inputLabel.textContent = isChain
+      ? "Command chain (one command + optional JSON object per line)"
+      : "Arguments (JSON object; batch uses a JSON array)";
+    this.argsInput.setAttribute(
+      "aria-label",
+      isChain ? "Command chain" : "Command arguments as JSON"
+    );
+    this.argsInput.placeholder = isChain
+      ? "app.state {}\ndocument.colors {}"
+      : '{"key":"value"}';
+    this.formatButton.textContent = isChain ? "Format chain" : "Format JSON";
   };
 
   ns.ConsoleController.prototype.onPresetClick_ = function (event) {
     var button = event.currentTarget;
-    this.setInput_(button.dataset.consoleCommand, button.dataset.consoleArgs);
+    var command = button.dataset.consoleCommand;
+    var input =
+      command === "chain" ? DEFAULT_CHAIN : button.dataset.consoleArgs;
+    this.setInput_(command, input);
     this.argsInput.focus();
     this.argsInput.select();
   };
@@ -207,9 +241,69 @@
     }
   };
 
+  ns.ConsoleController.prototype.parseChain_ = function (source) {
+    var items = [];
+    source.split(/\r?\n/).forEach(
+      function (rawLine, index) {
+        var lineNumber = index + 1;
+        var line = rawLine.trim();
+        if (!line || line.charAt(0) === "#") {
+          return;
+        }
+        if (line.charAt(line.length - 1) === ";") {
+          line = line.slice(0, -1).trim();
+        }
+        var match = line.match(/^(\S+)(?:\s+(.+))?$/);
+        if (!match) {
+          throw new Error(
+            "Chain line " +
+              lineNumber +
+              ' must use: command[.name] {"json":"arguments"}'
+          );
+        }
+        var command = match[1];
+        if (
+          !this.registeredCommands[command] &&
+          CHAINABLE_HELPERS.indexOf(command) === -1
+        ) {
+          throw new Error(
+            "Chain line " + lineNumber + ": unknown command " + command
+          );
+        }
+        var args;
+        try {
+          args = JSON.parse(match[2] || "{}");
+        } catch (error) {
+          throw new Error(
+            "Chain line " +
+              lineNumber +
+              " has invalid JSON: " +
+              (error.message || String(error))
+          );
+        }
+        if (args === null || typeof args !== "object" || Array.isArray(args)) {
+          throw new Error(
+            "Chain line " + lineNumber + " arguments must be a JSON object"
+          );
+        }
+        items.push({ command: command, args: args, line: lineNumber });
+      }.bind(this)
+    );
+    if (!items.length) {
+      throw new Error("Chain must contain at least one command");
+    }
+    if (items.length > 1000) {
+      throw new Error("Chain must contain at most 1000 commands");
+    }
+    return items;
+  };
+
   ns.ConsoleController.prototype.parseArgs_ = function (command) {
-    var source =
-      this.argsInput.value.trim() || (command === "batch" ? "[]" : "{}");
+    var source = this.argsInput.value.trim();
+    if (command === "chain") {
+      return this.parseChain_(source);
+    }
+    source = source || (command === "batch" ? "[]" : "{}");
     var args = JSON.parse(source);
     if (command === "batch") {
       if (!Array.isArray(args)) {
@@ -225,9 +319,48 @@
     return args;
   };
 
+  ns.ConsoleController.prototype.executeChain_ = function (items) {
+    var results = [];
+    var runAt = function (index) {
+      if (index >= items.length) {
+        return Promise.resolve({ count: results.length, results: results });
+      }
+      var item = items[index];
+      return this.execute_(item.command, item.args).then(
+        function (result) {
+          results.push({
+            line: item.line,
+            command: item.command,
+            result: result
+          });
+          return runAt(index + 1);
+        },
+        function (error) {
+          var message = error && error.message ? error.message : String(error);
+          var chainError = new Error(
+            "Chain stopped at line " +
+              item.line +
+              " (" +
+              item.command +
+              ") after " +
+              results.length +
+              " completed command(s): " +
+              message
+          );
+          chainError.name = "ChainError";
+          throw chainError;
+        }
+      );
+    }.bind(this);
+    return runAt(0);
+  };
+
   ns.ConsoleController.prototype.execute_ = function (command, args) {
     if (command === "help") {
       return Promise.resolve(this.api.help(args.filter));
+    }
+    if (command === "chain") {
+      return this.executeChain_(args);
     }
     if (command === "batch") {
       return this.api.batch(args);
@@ -258,7 +391,10 @@
       args = this.parseArgs_(command);
     } catch (error) {
       this.appendError_(command, error, 0);
-      this.setStatus_("Invalid JSON", "error");
+      this.setStatus_(
+        command === "chain" ? "Invalid command chain" : "Invalid JSON",
+        "error"
+      );
       return;
     }
 
@@ -420,19 +556,33 @@
     this.status.dataset.state = state;
   };
 
-  ns.ConsoleController.prototype.onFormatJson_ = function () {
+  ns.ConsoleController.prototype.onFormatInput_ = function () {
+    var command = this.commandInput.value.trim();
     try {
-      var value = JSON.parse(this.argsInput.value.trim() || "{}");
-      this.argsInput.value = JSON.stringify(value, null, 2);
-      this.setStatus_("JSON formatted", "ready");
+      if (command === "chain") {
+        var items = this.parseChain_(this.argsInput.value.trim());
+        this.argsInput.value = items
+          .map(function (item) {
+            return item.command + " " + JSON.stringify(item.args);
+          })
+          .join("\n");
+        this.setStatus_("Command chain formatted", "ready");
+      } else {
+        var value = JSON.parse(this.argsInput.value.trim() || "{}");
+        this.argsInput.value = JSON.stringify(value, null, 2);
+        this.setStatus_("JSON formatted", "ready");
+      }
     } catch (error) {
       this.appendError_("format", error, 0);
-      this.setStatus_("Invalid JSON", "error");
+      this.setStatus_(
+        command === "chain" ? "Invalid command chain" : "Invalid JSON",
+        "error"
+      );
     }
   };
 
   ns.ConsoleController.prototype.onClearInput_ = function () {
-    this.setInput_("app.state", "{}");
+    this.setInput_("chain", DEFAULT_CHAIN);
     this.commandInput.focus();
   };
 
@@ -587,7 +737,7 @@
     }
     this.historyIndex = Math.min(this.history.length, this.historyIndex + 1);
     if (this.historyIndex === this.history.length) {
-      this.setInput_("app.state", "{}");
+      this.setInput_("chain", DEFAULT_CHAIN);
       return;
     }
     var entry = this.history[this.historyIndex];

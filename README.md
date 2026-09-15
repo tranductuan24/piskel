@@ -20,23 +20,22 @@ Piskel is a browser-based editor for pixel art, game sprites, and frame-by-frame
 
 ## Console API
 
-Piskel exposes `window.piskelAPI` v2 after the editor starts. The API provides complete drawing and file state, app settings, validated editing commands, import/export, persistence, UI control, and live change events.
+Open **`>_ API`** in the right toolbar to use Piskel's Console API without DevTools. The panel can run a single JSON command or a command chain with one click:
 
-Open **`>_ API`** in the right toolbar to run JSON commands without DevTools, or use the API from browser automation:
-
-```js
-const api = window.piskelAPI;
-console.table(api.help());
-
-await api.draw.pixels({
-  pixels: [{ x: 0, y: 0, color: "#ff004d" }]
-});
+```text
+app.state
+document.colors
+frame.read {"layer":0,"frame":0,"format":"sparse"}
 ```
 
-- [Console API reference](docs/console-api.md)
+Put one command and an optional one-line JSON object on each line, then select **Run** or press `Ctrl/Command + Enter`. The panel provides command discovery, history, formatted output, downloads, and live change events.
+
+Piskel also exposes the same API as `window.piskelAPI` for Playwright and other trusted browser automation.
+
+- [Console UI and API reference](docs/console-api.md)
 - [AI agent skill](SKILL.md)
 
-The command runner only dispatches registered commands; it does not use `eval`.
+Only registered commands are dispatched; arbitrary JavaScript is never evaluated.
 
 ## Browser support
 

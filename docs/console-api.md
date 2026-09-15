@@ -1,173 +1,194 @@
-# Piskel Console API v2
+# Piskel Console UI and API v2
 
-Piskel exposes a JSON-safe automation facade at `window.piskelAPI` after the editor has initialized. It is available in production and development builds.
+The primary way to use Piskel automation is the built-in **Console API** panel. Open **`>_ API`** in the right toolbar; DevTools is not required.
 
-Use it to inspect or change drawings, files, settings, layers, frames, palettes, tools, selections, storage, and UI state without reaching into Piskel's private model objects.
+The panel exposes every registered Piskel command, complete drawing and settings state, command chains, history, structured output, and live change events. It accepts declarative commands and JSON only—never arbitrary JavaScript.
 
-## Quick start
+## Run several commands at once
 
-```js
-const api = window.piskelAPI;
+The panel opens in `chain` mode. Put one command on each line, followed by an optional one-line JSON object:
 
-console.log(api.version);       // "2.0.0"
-console.table(api.help());      // registered commands and argument schemas
-console.log(api.capabilities());
-
-const state = await api.app.state();
-await api.draw.pixels({
-  pixels: [{ x: 1, y: 1, color: "#ff004d" }]
-});
+```text
+# Blank lines and full-line comments are ignored.
+app.state
+document.colors {}
+frame.read {"layer":0,"frame":0,"format":"sparse"}
 ```
 
-All registered commands return a `Promise`; always `await` them. `help()` and `capabilities()` are synchronous discovery helpers.
+Select **Run** or press `Ctrl/Command + Enter`. All lines run sequentially from top to bottom with one execution.
 
-## Built-in command panel
+A more complete chain can create and verify a drawing:
 
-Select **`>_ API`** in the editor's right toolbar to use the API without opening DevTools.
-
-The panel includes:
-
-- A searchable command field with argument help
-- A JSON argument editor and formatting control
-- Presets for app state, complete snapshots, documents, settings, and help
-- `Ctrl/Command + Enter` execution
-- Command history with `Alt + Up/Down`
-- Success, error, and change-event output
-- Copy and download actions for the complete latest result
-- A **Follow changes** live event stream
-
-The panel accepts only registered command names and JSON arguments. It does not evaluate arbitrary JavaScript.
-
-In addition to registered commands, the panel provides `help`, `batch`, `capabilities`, `whenIdle`, and `waitForChange` helpers.
-
-## Discovery
-
-Treat runtime discovery as the canonical command reference:
-
-```js
-api.help();            // all registered commands
-api.help("document"); // one command group
-api.capabilities();    // groups, formats, events, settings, and limits
+```text
+document.new {"name":"Robot","width":16,"height":16,"fps":8,"frameCount":2,"layerNames":["Background","Robot"]}
+draw.clear {"layer":0,"frame":0,"color":"#222034"}
+draw.clear {"layer":0,"frame":1,"color":"#222034"}
+draw.rect {"layer":1,"frame":0,"x":4,"y":3,"width":8,"height":10,"color":"#5fcde4","fill":true}
+draw.pixels {"layer":1,"frame":0,"pixels":[{"x":6,"y":7,"color":"#ffffff"},{"x":9,"y":7,"color":"#ffffff"}]}
+frame.read {"layer":1,"frame":0,"format":"sparse"}
 ```
 
-Each `help()` entry contains:
+### Chain syntax
 
-```js
+```text
+command.name {"optional":"JSON arguments"}
+```
+
+Rules:
+
+- One command per physical line
+- Arguments must be a JSON object on the same line
+- Omit arguments when the command accepts `{}`
+- Empty lines and lines beginning with `#` are ignored
+- A trailing semicolon is optional
+- Command names and JSON structure are validated before the first command runs
+- At most 1,000 commands can run in one chain
+- Commands run in order and stop at the first runtime/validation error
+- A failed chain does not roll back commands that already completed
+
+The **Format chain** button removes comments and optional semicolons, then normalizes each line. Use **Chain example** to restore a safe, read-only sample.
+
+A successful chain returns:
+
+```json
 {
-  command: "draw.rect",
-  group: "draw",
-  args: "{x,y,width,height,color,fill=false,layer?,frame?}",
-  description: "...",
-  mutates: true,
-  returns: "JSON"
+  "count": 3,
+  "results": [
+    {
+      "line": 1,
+      "command": "app.state",
+      "result": {}
+    }
+  ]
 }
 ```
 
-## Calling commands
+Each mutation remains its own undo/history operation. “One execution” means one click for an ordered sequence, not one atomic transaction.
 
-Namespaced, string, and object forms are equivalent:
+## Run one command
 
-```js
-await api.draw.rect({
-  x: 2,
-  y: 2,
-  width: 12,
-  height: 12,
-  color: "#ff004d",
-  fill: true
-});
+For a large or multiline JSON payload, choose a normal command in the **Command** field and put its JSON object in **Arguments**.
 
-await api.execute("draw.rect", {
-  x: 2,
-  y: 2,
-  width: 12,
-  height: 12,
-  color: "#ff004d",
-  fill: true
-});
+Example:
 
-await api.execute({
-  command: "draw.rect",
-  args: {
-    x: 2,
-    y: 2,
-    width: 12,
-    height: 12,
-    color: "#ff004d",
-    fill: true
-  }
-});
+- Command: `draw.rect`
+- Arguments:
+
+```json
+{
+  "x": 2,
+  "y": 2,
+  "width": 12,
+  "height": 12,
+  "color": "#ff004d",
+  "fill": true
+}
 ```
 
-Commands share a sequential queue. A rejected command does not block later commands.
+Select **Format JSON** to format the object, then run it. The argument field defaults to `{}` when left empty.
 
-Run several commands in order with `batch()`:
+The older `batch` pseudo-command remains available for JSON-array workflows:
 
-```js
-const results = await api.batch([
-  { command: "layer.add", args: { name: "Effects" } },
-  {
-    command: "draw.ellipse",
-    args: {
-      x: 2,
-      y: 2,
-      width: 8,
-      height: 8,
-      color: "#ffffff"
-    }
-  }
-]);
-
-await api.whenIdle();
+```json
+[
+  { "command": "layer.add", "args": { "name": "Effects" } },
+  { "command": "frame.add", "args": {} }
+]
 ```
 
-A batch stops at its first failure. It does not roll back commands that already completed.
+For interactive use, `chain` is shorter and is the recommended mode.
 
-## Complete state
+## Discover commands in the panel
 
-`app.state()` returns a lightweight snapshot of the live editor:
+Type in the **Command** field to search the complete registry. Selecting a command displays its argument signature, description, and whether it mutates the app.
 
-```js
-const state = await api.app.state();
+The panel also provides these utility commands:
 
-state.document;  // metadata, dimensions, FPS, layers, frames, and hash
-state.file;      // file identity, model version, save status, and hash
-state.settings;  // every current app setting
-state.history;   // undo/redo availability and queue position
-state.selection;
-state.view;
-state.palette;
+| Command | Arguments | Purpose |
+| --- | --- | --- |
+| `chain` | One command per line | Run an ordered command script |
+| `help` | `{"filter":"draw"}` | List commands, optionally by group |
+| `capabilities` | `{}` | Show groups, formats, settings, events, and limits |
+| `batch` | JSON command array | Run the original array batch format |
+| `whenIdle` | `{}` | Wait for queued API work and return current state |
+| `waitForChange` | `{"since":0,"type":"document","timeout":30000}` | Wait for a matching public event |
+
+Useful discovery input:
+
+```text
+help {"filter":"document"}
+help {"filter":"file"}
+capabilities
 ```
 
-Pixels and serialized file data are opt-in:
+Chains accept all registered dotted commands plus `help`, `capabilities`, `whenIdle`, and `waitForChange`. The `chain` and JSON-array `batch` utilities cannot be nested.
 
-```js
-const currentPixels = await api.app.state({
-  includePixels: "current",
-  pixelFormat: "sparse"
-});
+## Panel controls
 
-const complete = await api.app.snapshot({
-  includePixels: "all",
-  pixelFormat: "uint32",
-  includeSerialized: true,
-  includePalettes: true
-});
+| Control | Behavior |
+| --- | --- |
+| **Chain example** | Load the default read-only chain |
+| **App state** | Load `app.state` |
+| **Full snapshot** | Load a complete restorable state read |
+| **Document** | Load all layers, frames, and readable pixels |
+| **Settings** | Load all current app settings |
+| **Commands** | Load `help` |
+| `Ctrl/Command + Enter` | Run current input |
+| `Alt + Up/Down` | Navigate command history |
+| **Copy latest** | Copy the complete latest result/error |
+| **Download** | Download the complete latest result/error as text |
+| **Follow changes** | Append live public API events |
+
+The panel retains up to 50 history entries for the browser session and up to 100 output entries. A rendered entry is truncated after 250,000 characters, but copy/download retains its complete value.
+
+## Read current state
+
+Use a chain to inspect related state in one run:
+
+```text
+app.state
+document.state {"pixels":"none"}
+file.state {"includeSerialized":false}
+settings.state
+history.state
+selection.state {"includePixels":true}
+view.state
+palette.state
 ```
 
-Returned values are detached, JSON-safe copies. Mutating a returned object does not mutate the editor.
+`app.state` includes:
 
-Convenience aliases are available:
+- Document metadata, dimensions, FPS, selected layer/frame, and hashes
+- File identity, model version, dirty/saving state, and hash
+- Every current app setting
+- History, selection, view, palette, tool, colors, and pen size
+- API revision and queue state
 
-```js
-await api.getState();
-await api.getDocument();
-await api.getSettings();
+Request exact data only when needed:
+
+```text
+frame.read {"layer":0,"frame":0,"format":"rows"}
+frame.read {"layer":0,"frame":0,"format":"sparse"}
+document.read {"pixels":"all","format":"uint32"}
+app.snapshot {"includePixels":"all","pixelFormat":"uint32","includeSerialized":true,"includePalettes":true}
 ```
+
+Returned objects are detached, JSON-safe copies. Editing output text does not change the drawing. To restore an edited structured document, run `document.write` as a single command and pass the edited document in its JSON arguments.
+
+### Pixel formats
+
+| Format | Shape | Best use |
+| --- | --- | --- |
+| `rows` | `pixels[y][x]` color strings | Human-readable inspection |
+| `flat` | Row-major color strings | Simple full-frame processing |
+| `sparse` | Non-transparent `{x,y,color}` entries | Small reads and patches |
+| `uint32` | Exact row-major internal RGBA integers | Lossless round trips |
+
+Indexes start at `0`. Layer `0` is the bottom layer, and pixel `(0, 0)` is the top-left corner.
 
 ## Command groups
 
-| Group | Commands |
+| Group | Registered commands |
 | --- | --- |
 | App | `app.state`, `snapshot`, `capabilities`, `changes` |
 | Document | `document.new`, `read`, `state`, `write`, `update`, `resize`, `colors` |
@@ -187,226 +208,152 @@ await api.getSettings();
 | UI | `ui.state`, `settings`, `dialog`, `notify` |
 | Shortcut | `shortcut.list`, `set`, `reset`, `trigger` |
 
-Use `api.help("group")` for current argument and return details instead of relying on a copied static signature.
+Use the panel's `help` command for current arguments and return details instead of relying on copied signatures.
 
-## Drawing and animation
+## Common UI recipes
 
-Indexes are zero-based. Layer `0` is the bottom layer, and pixel `(0, 0)` is the top-left corner.
+### Layers, frames, and drawing
 
-```js
-await api.document.new({
-  name: "Robot",
-  description: "Created with the Console API",
-  width: 32,
-  height: 32,
-  fps: 8,
-  frameCount: 2,
-  layerNames: ["Background", "Robot"]
-});
-
-await api.layer.select({ layer: 0 });
-await api.draw.clear({ color: "#222034" });
-await api.frame.select({ frame: 1 });
-await api.draw.clear({ color: "#222034" });
-
-await api.layer.select({ layer: 1 });
-await api.frame.select({ frame: 0 });
-await api.draw.rect({
-  x: 8,
-  y: 6,
-  width: 16,
-  height: 20,
-  color: "#5fcde4",
-  fill: true
-});
-await api.frame.duplicate({ frame: 0 });
+```text
+layer.add {"name":"Highlights"}
+layer.update {"layer":1,"name":"Character","opacity":0.9}
+frame.add
+frame.duplicate {"frame":0}
+frame.move {"from":1,"to":2}
+draw.clear {"layer":1,"frame":0,"color":"transparent"}
+draw.ellipse {"layer":1,"frame":0,"x":2,"y":2,"width":8,"height":8,"color":"#ffffff","fill":false}
+draw.replaceColor {"from":"#ffffff","to":"#ffcc00","scope":"document"}
+app.state
 ```
 
-Direct drawing commands can target an unselected `layer` and `frame` without changing the current selection. Their validation completes before pixel data is committed.
-
-### Structured pixels
-
-`frame.read`, `frame.write`, `document.read`, and `document.write` support four formats:
-
-| Format | Shape |
-| --- | --- |
-| `rows` | `pixels[y][x]` color strings |
-| `flat` | Row-major color strings |
-| `sparse` | Non-transparent `{x, y, color}` entries |
-| `uint32` | Exact row-major internal RGBA integers |
-
-Use `uint32` for compact, lossless round trips and `sparse` for small patches.
-
-```js
-const document = await api.document.read({
-  pixels: "all",
-  format: "uint32"
-});
-
-document.name = "Robot copy";
-await api.document.write({ document });
-
-await api.frame.write({
-  format: "sparse",
-  clear: false,
-  pixels: [
-    { x: 1, y: 1, color: "#ff0000" },
-    { x: 2, y: 1, color: "transparent" }
-  ]
-});
-```
-
-`document.write` validates the complete replacement before changing the current drawing.
+Direct drawing commands can target an unselected layer/frame without changing the current selection. A direct draw or `frame.write` validates its complete pixel change before committing one history snapshot.
 
 ### Native tools and transforms
 
-Use `tool.stroke` when native tool behavior matters:
-
-```js
-const tools = await api.tool.list();
-
-await api.tool.select({ id: "tool-vertical-mirror-pen" });
-await api.tool.colors({ primary: "#ffcc00", secondary: "transparent" });
-await api.tool.penSize({ size: 2 });
-await api.tool.stroke({
-  points: [
-    { x: 4, y: 4 },
-    { x: 8, y: 12 }
-  ]
-});
-
-await api.transform.apply({ id: "tool-flip", shiftKey: true });
+```text
+tool.select {"id":"tool-vertical-mirror-pen"}
+tool.colors {"primary":"#ffcc00","secondary":"transparent"}
+tool.penSize {"size":2}
+tool.stroke {"points":[{"x":4,"y":4},{"x":8,"y":12}]}
+transform.apply {"id":"tool-flip","shiftKey":true}
+tool.state
 ```
 
-`tool.stroke` follows the native press, move, and release lifecycle. Do not run it while the user is performing an active pointer gesture.
+`tool.stroke` uses the selected tool's native press, move, and release behavior. Do not run it during an active real pointer gesture.
 
-## Settings
+### Selection and API clipboard
 
-Read all settings or inspect the writable schema:
-
-```js
-const values = await api.settings.read();
-const schema = await api.settings.schema();
-
-await api.settings.set({ key: "GRID_ENABLED", value: true });
-await api.settings.setMany({
-  values: {
-    GRID_COLOR: "#ffffff",
-    GRID_SPACING: 8,
-    DEFAULT_SIZE: { width: 64, height: 64 },
-    ONION_SKIN: true,
-    PEN_SIZE: 3
-  }
-});
-
-await api.settings.reset({ key: "GRID_ENABLED" });
+```text
+selection.create {"x":4,"y":4,"width":8,"height":8}
+selection.copy
+selection.move {"dx":4,"dy":0,"moveContent":true}
+selection.paste {"offsetX":0,"offsetY":8,"clip":true}
+selection.commit
+selection.state
 ```
 
-`settings.setMany` validates every supplied value before applying any of them. Shortcut mappings use the separate `shortcut` group.
+The API clipboard is kept in memory and does not require operating-system clipboard permission.
 
-## Import, export, and persistence
+### Settings
 
-Export formats are `piskel`, `png`, `gif`, `zip`, `pixi`, and `c`:
-
-```js
-const file = await api.file.read();
-const png = await api.file.export({
-  format: "png",
-  scale: 4,
-  columns: 4,
-  visibleOnly: true
-});
-const gif = await api.file.export({ format: "gif", scale: 4, repeat: true });
-const pixi = await api.file.export({ format: "pixi", columns: 4 });
-
-await api.file.import({ data: file.serialized });
+```text
+settings.schema
+settings.set {"key":"GRID_ENABLED","value":true}
+settings.setMany {"values":{"GRID_COLOR":"#ffffff","GRID_SPACING":8,"ONION_SKIN":true,"PEN_SIZE":3}}
+settings.read
 ```
 
-Set `download: true` to invoke the browser download flow. Binary exports return data URLs; Pixi export returns `{image, json}`.
+`settings.setMany` validates all supplied values before applying any of them. Use `settings.reset {"key":"GRID_ENABLED"}` to restore one default or `settings.reset` to restore all supported settings.
 
-Image import accepts base64 PNG, JPEG, BMP, WebP, animated GIF, and spritesheet data URLs:
+### Import, export, and storage
 
-```js
-await api.file.importImage({
-  data: "data:image/png;base64,...",
-  mode: "spritesheet",
-  name: "Walk",
-  frameWidth: 16,
-  frameHeight: 16
-});
+```text
+file.state
+file.export {"format":"png","scale":4,"columns":4,"visibleOnly":true,"download":true,"name":"sprite"}
+file.export {"format":"gif","scale":4,"repeat":true,"download":true,"name":"animation"}
+storage.capabilities
+storage.save {"target":"browser","name":"Robot"}
+storage.list
 ```
 
-Remote image URLs are intentionally rejected. Fetch trusted data separately and provide a data URL.
+Export formats are `piskel`, `png`, `gif`, `zip`, `pixi`, and `c`. Set `download:true` only when a browser download is intended.
 
-Browser persistence and backup commands use the editor's existing services:
+For `.piskel` or image import, select `file.import`/`file.importImage` as a single command and paste the serialized object or trusted base64 data URL into the JSON editor. Remote image URLs are intentionally rejected.
 
-```js
-await api.storage.save({ target: "browser", name: "Robot" });
-const saved = await api.storage.list();
-await api.storage.load({ name: "Robot" });
-await api.storage.remove({ name: "Robot" });
+Browser save targets are `browser`, `download`, `desktop`, and `gallery`. Desktop and gallery availability depends on the running build and authentication; inspect `storage.capabilities` first.
 
-const sessions = await api.backup.list();
+### View and UI
+
+```text
+view.zoom {"value":16}
+view.pan {"dx":2,"dy":-1}
+view.reset
+ui.notify {"message":"Command chain complete","hideDelay":2000}
+ui.state
 ```
 
-Available save targets are `browser`, `download`, `desktop`, and `gallery`. Desktop and gallery depend on the running build and authentication state; inspect `storage.capabilities()` first.
+A chain can open another settings panel or close the Console panel through `ui.settings`, but subsequent commands still continue in the API queue. Popup windows and native prompts remain subject to browser policy.
 
-## Selection and API clipboard
+## Follow live changes
 
-The API clipboard is in memory and does not require operating-system clipboard permission:
+Enable **Follow changes** to append events caused by either normal editor interactions or API commands.
 
-```js
-await api.selection.create({ x: 4, y: 4, width: 8, height: 8 });
-await api.selection.copy();
-await api.selection.move({ dx: 4, dy: 0, moveContent: true });
-await api.selection.paste({ offsetX: 0, offsetY: 8, clip: true });
-await api.selection.commit();
+Event types are:
+
+- `document`
+- `settings`
+- `history`
+- `selection`
+- `palette`
+- `tool`
+- `view`
+- `save`
+- `ui`
+- `change` (catch-all)
+
+Read the bounded event log from the panel:
+
+```text
+app.state
+app.changes {"since":0}
 ```
 
-## UI automation
+Use the `waitForChange` utility as a standalone panel command when waiting for future activity.
+
+## Programmatic API (secondary interface)
+
+Trusted browser automation can call the same registry through `window.piskelAPI`:
 
 ```js
-await api.view.zoom({ value: 16 });
-await api.view.pan({ dx: 2, dy: -1 });
-await api.view.reset();
+const api = window.piskelAPI;
+console.table(api.help("draw"));
 
-await api.ui.settings({ panel: "console" });
-await api.ui.settings({ panel: null });
-await api.ui.dialog({ id: "cheatsheet" });
-await api.ui.dialog({ open: false });
-await api.ui.notify({ message: "Done", hideDelay: 2000 });
-```
-
-`ui.settings` accepts `user`, `resize`, `save`, `export`, `import`, `localstorage`, `console`, or `null`. Popup windows and native file or clipboard prompts remain subject to browser permissions.
-
-## Change events
-
-The API exposes a bounded change log and live subscriptions. Events caused through either the normal UI or the API are observable.
-
-```js
-const initial = await api.app.state();
-
-const unsubscribe = api.on("document", event => {
-  console.log(event.revision, event.details);
-});
-
-await api.draw.pixels({
-  pixels: [{ x: 0, y: 0, color: "#ff0000" }]
-});
-
-const changes = await api.app.changes({ since: initial.revision });
-unsubscribe();
-
-const nextSettingsChange = await api.waitForChange({
-  since: initial.revision,
-  type: "settings",
-  timeout: 30000
+await api.draw.rect({
+  x: 2,
+  y: 2,
+  width: 12,
+  height: 12,
+  color: "#ff004d",
+  fill: true
 });
 ```
 
-Event types are `document`, `settings`, `history`, `selection`, `palette`, `tool`, `view`, `save`, and `ui`, plus the catch-all `change` event. Lifecycle helpers include `on`, `off`, `once`, `waitForChange`, and `destroy`.
+Registered namespaced methods and `execute` are equivalent:
 
-## Browser automation
+```js
+await api.execute("draw.rect", {
+  x: 2,
+  y: 2,
+  width: 12,
+  height: 12,
+  color: "#ff004d",
+  fill: true
+});
+```
+
+All registered commands return a `Promise`; always `await` them. `help()` and `capabilities()` are synchronous. Commands share a sequential queue, and a rejected command does not block later independent commands.
+
+For Playwright:
 
 ```js
 await page.waitForFunction(() => Boolean(window.piskelAPI));
@@ -414,35 +361,31 @@ await page.waitForFunction(() => Boolean(window.piskelAPI));
 const result = await page.evaluate(async () => {
   const api = window.piskelAPI;
   await api.document.new({ width: 16, height: 16 });
-  await api.draw.rect({
-    x: 2,
-    y: 2,
-    width: 12,
-    height: 12,
-    color: "#ff004d",
-    fill: true
+  await api.draw.pixels({
+    pixels: [{ x: 0, y: 0, color: "#ff004d" }]
   });
-  return api.document.read({ pixels: "current", format: "sparse" });
+  return api.frame.read({ format: "sparse" });
 });
 ```
 
-For a workflow optimized for AI agents, see [`SKILL.md`](../SKILL.md).
+Direct helpers include `batch`, `whenIdle`, `on`, `off`, `once`, `waitForChange`, and `destroy`. Convenience aliases are `getState`, `getDocument`, and `getSettings`.
+
+For an agent workflow centered on the in-app panel, see [`SKILL.md`](../SKILL.md).
 
 ## Safety and limits
 
-- Only registered commands are executable; the API has no `eval` path.
-- Commands do not expose mutable private editor objects.
-- There is no HTTP server, WebSocket listener, or cross-origin `postMessage` bridge.
-- A direct draw or frame-write command creates one undo snapshot.
-- Import and history commands wait for asynchronous decode or restore work.
-- Maximum dimensions: `2048 x 2048`.
+- Only registered commands run; there is no `eval` path.
+- Output never exposes mutable private editor objects.
+- The API does not open an HTTP server, WebSocket listener, or cross-origin message bridge.
+- Maximum document dimensions: `2048 x 2048`.
 - Maximum layers: `256`; maximum frames: `10,000`.
 - Maximum total layer-frame pixels: `16,777,216`.
-- Maximum batch length: `1,000` commands.
+- Maximum chain/batch length: `1,000` commands.
 - Image and `.piskel` inputs are limited to 64 MiB.
-- Large image exports have canvas-dimension and total-pixel guards.
+- Large exports have canvas-dimension and total-pixel guards.
+- Native downloads, popups, file pickers, and system clipboard access remain subject to browser permissions.
 
-Use `api.capabilities().limits` as the runtime source of truth.
+Run `capabilities` in the panel for the current runtime limits.
 
 ## Testing
 
@@ -453,4 +396,4 @@ npm run lint
 npm run build
 ```
 
-The Node suite covers API validation and model behavior. The Playwright suite covers integration with the running editor and the built-in command panel.
+The Node suite covers API and command-chain validation. The Playwright suite covers the running editor and Console UI.

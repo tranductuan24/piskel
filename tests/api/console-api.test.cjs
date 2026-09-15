@@ -163,7 +163,14 @@ function setup() {
   });
   app.piskelController = new p.controller.piskel.PublicPiskelController(core);
   app.piskelController.init();
-  return { api: p.api.create(app), core, events, settingValues };
+  return {
+    api: p.api.create(app),
+    core,
+    events,
+    settingValues,
+    context,
+    p
+  };
 }
 
 test("atomic draw validation, snapshot and queue recovery", async () => {
@@ -387,4 +394,90 @@ test("change subscriptions, bounded log reads and waitForChange return isolated 
     timeout: 1
   });
   assert.equal(waited.type, "document");
+});
+
+test("console chain parses and executes one-line commands in order", async () => {
+  const { api, context, p } = setup();
+  p.controller.settings = p.controller.settings || {};
+  p.controller.settings.AbstractSettingController = function () {};
+  p.controller.settings.AbstractSettingController.prototype.destroy =
+    function () {};
+  vm.runInContext(
+    fs.readFileSync(
+      path.join(
+        __dirname,
+        "../../src/js/controller/settings/ConsoleController.js"
+      ),
+      "utf8"
+    ),
+    context
+  );
+
+  const controller = new p.controller.settings.ConsoleController();
+  controller.api = api;
+  api.help().forEach((item) => {
+    controller.registeredCommands[item.command] = true;
+  });
+
+  const chain = controller.parseChain_(`
+# Comments and blank lines are ignored.
+document.new {"width":4,"height":3,"name":"Chain"};
+draw.pixels {"pixels":[{"x":2,"y":1,"color":"#abcdef"}]}
+frame.read
+  `);
+  assert.equal(chain.length, 3);
+  assert.equal(chain[0].command, "document.new");
+  assert.deepEqual(JSON.parse(JSON.stringify(chain[2].args)), {});
+
+  const output = await controller.executeChain_(chain);
+  assert.equal(output.count, 3);
+  assert.deepEqual(Array.from(output.results[2].result[1]), [
+    "rgba(0, 0, 0, 0)",
+    "rgba(0, 0, 0, 0)",
+    "#abcdef",
+    "rgba(0, 0, 0, 0)"
+  ]);
+  assert.equal((await api.app.state()).name, "Chain");
+
+  const helperOutput = await controller.executeChain_(
+    controller.parseChain_('help {"filter":"draw"}\ncapabilities')
+  );
+  assert.equal(helperOutput.count, 2);
+  assert.ok(
+    helperOutput.results[0].result.some(
+      (item) => item.command === "draw.pixels"
+    )
+  );
+  assert.equal(helperOutput.results[1].result.version, "2.0.0");
+
+  const partial = controller.parseChain_(
+    'draw.pixels {"pixels":[{"x":0,"y":0,"color":"#123456"}]}\n' +
+      'draw.pixels {"pixels":[{"x":99,"y":0,"color":"#ffffff"}]}'
+  );
+  await assert.rejects(
+    controller.executeChain_(partial),
+    /line 2 \(draw\.pixels\) after 1 completed command/
+  );
+  assert.equal((await api.frame.read())[0][0], "#123456");
+
+  assert.throws(
+    () => controller.parseChain_("draw.missing {}"),
+    /unknown command/
+  );
+  assert.throws(
+    () => controller.parseChain_("constructor {}"),
+    /unknown command/
+  );
+  assert.throws(
+    () => controller.parseChain_("__proto__ {}"),
+    /unknown command/
+  );
+  assert.throws(
+    () => controller.parseChain_("draw.pixels {bad}"),
+    /line 1 has invalid JSON/
+  );
+  assert.throws(
+    () => controller.parseChain_("draw.pixels []"),
+    /arguments must be a JSON object/
+  );
 });

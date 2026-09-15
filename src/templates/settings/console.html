@@ -3,12 +3,13 @@
     <header class="console-header">
       <div>
         <h2 class="console-title">Console API</h2>
-        <p class="console-subtitle">Run every Piskel API command without opening DevTools. Input is JSON only; arbitrary JavaScript is never evaluated.</p>
+        <p class="console-subtitle">Run one command or a multi-command chain directly in Piskel. Arguments stay JSON-only; JavaScript is never evaluated.</p>
       </div>
       <div class="console-status" data-test-id="console-status" role="status" aria-live="polite">Starting…</div>
     </header>
 
     <div class="console-presets" aria-label="Quick commands">
+      <button type="button" class="button console-preset console-chain-preset" data-console-command="chain">Chain example</button>
       <button type="button" class="button console-preset" data-console-command="app.state" data-console-args='{}'>App state</button>
       <button type="button" class="button console-preset" data-console-command="app.snapshot" data-console-args='{"includePixels":"all","pixelFormat":"uint32","includeSerialized":true,"includePalettes":true}'>Full snapshot</button>
       <button type="button" class="button console-preset" data-console-command="document.read" data-console-args='{"pixels":"all","format":"rows"}'>Document</button>
@@ -37,7 +38,7 @@
         Select a command to see its argument schema.
       </div>
 
-      <label class="console-args-label" for="console-args-input">Arguments (JSON object; use a JSON array with the pseudo-command <code>batch</code>)</label>
+      <label class="console-args-label console-input-label" for="console-args-input">Command chain (one command + optional JSON object per line)</label>
       <textarea
         id="console-args-input"
         class="console-args-input allow-user-select"
@@ -45,12 +46,12 @@
         autocomplete="off"
         autocapitalize="off"
         spellcheck="false"
-        aria-label="Command arguments as JSON"
-      >{}</textarea>
+        aria-label="Command chain"
+      ></textarea>
 
       <div class="console-editor-actions">
         <button type="button" class="button button-primary console-run" data-test-id="console-run">Run <span class="console-key-hint">Ctrl/⌘ + Enter</span></button>
-        <button type="button" class="button console-format">Format JSON</button>
+        <button type="button" class="button console-format">Format chain</button>
         <button type="button" class="button console-clear-input">Reset input</button>
         <label class="console-follow-label" title="Append public API change events to the output">
           <input type="checkbox" class="console-follow-events" /> Follow changes

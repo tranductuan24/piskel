@@ -161,16 +161,15 @@
   margin-bottom: 4px;
 }
 
-.console-args-label code {
+.settings-console[data-input-mode="chain"] .console-input-label {
   color: var(--highlight-color);
-  font-family: monospace;
 }
 
 .console-args-input {
   box-sizing: border-box;
   display: block;
   width: 100%;
-  height: 116px;
+  height: 148px;
   resize: vertical;
   border: 1px solid #777;
   border-radius: 2px;
@@ -383,7 +382,7 @@
   }
 
   .console-args-input {
-    height: 80px;
+    height: 92px;
   }
 
   .console-presets .button:nth-child(3),
