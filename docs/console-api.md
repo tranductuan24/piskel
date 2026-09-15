@@ -1,165 +1,202 @@
-# Piskel Console API (v2)
+# Piskel Console API v2
 
-Piskel cung cấp facade automation ổn định tại **`window.piskelAPI`** sau khi editor khởi tạo. API có trong cả production lẫn debug build và có thể điều khiển editor mà không cần click lên canvas.
+Piskel exposes a JSON-safe automation facade at `window.piskelAPI` after the editor has initialized. It is available in production and development builds.
+
+Use it to inspect or change drawings, files, settings, layers, frames, palettes, tools, selections, storage, and UI state without reaching into Piskel's private model objects.
+
+## Quick start
 
 ```js
 const api = window.piskelAPI;
-console.log(api.version);                  // "2.0.0"
-console.table(api.help());                 // toàn bộ command
-console.log(api.capabilities());           // nhóm, event và giới hạn an toàn
+
+console.log(api.version);       // "2.0.0"
+console.table(api.help());      // registered commands and argument schemas
+console.log(api.capabilities());
+
+const state = await api.app.state();
+await api.draw.pixels({
+  pixels: [{ x: 1, y: 1, color: "#ff004d" }]
+});
 ```
 
-Mọi command đã đăng ký đều trả `Promise`; luôn dùng `await`. Riêng `help()` và `capabilities()` là các hàm discovery đồng bộ.
+All registered commands return a `Promise`; always `await` them. `help()` and `capabilities()` are synchronous discovery helpers.
 
-## Dùng Console API ngay trong UI (không cần DevTools)
+## Built-in command panel
 
-Nhấn nút **`>_ API`** ở thanh công cụ bên phải để mở Console API toàn màn hình dạng drawer. Bảng này cung cấp:
+Select **`>_ API`** in the editor's right toolbar to use the API without opening DevTools.
 
-- Danh sách tìm kiếm được của toàn bộ command và schema tham số ngay bên dưới.
-- Preset đọc App state, Full snapshot, Document, Settings và danh sách Commands.
-- JSON editor, format JSON và chạy nhanh bằng `Ctrl/⌘ + Enter`.
-- Pseudo-command `batch`, `help`, `capabilities`, `whenIdle`, `waitForChange`.
-- Command history bằng nút `↑`/`↓` hoặc `Alt + ↑`/`Alt + ↓`.
-- Output phân biệt success/error/event, tự cắt phần hiển thị quá lớn nhưng vẫn cho copy/download kết quả đầy đủ.
-- Tùy chọn **Follow changes** để xem live event stream của editor.
+The panel includes:
 
-Ví dụ chọn command `draw.rect`, rồi nhập vào ô **Arguments**:
+- A searchable command field with argument help
+- A JSON argument editor and formatting control
+- Presets for app state, complete snapshots, documents, settings, and help
+- `Ctrl/Command + Enter` execution
+- Command history with `Alt + Up/Down`
+- Success, error, and change-event output
+- Copy and download actions for the complete latest result
+- A **Follow changes** live event stream
 
-```json
+The panel accepts only registered command names and JSON arguments. It does not evaluate arbitrary JavaScript.
+
+In addition to registered commands, the panel provides `help`, `batch`, `capabilities`, `whenIdle`, and `waitForChange` helpers.
+
+## Discovery
+
+Treat runtime discovery as the canonical command reference:
+
+```js
+api.help();            // all registered commands
+api.help("document"); // one command group
+api.capabilities();    // groups, formats, events, settings, and limits
+```
+
+Each `help()` entry contains:
+
+```js
 {
-  "x": 2,
-  "y": 2,
-  "width": 12,
-  "height": 12,
-  "color": "#ff004d",
-  "fill": true
+  command: "draw.rect",
+  group: "draw",
+  args: "{x,y,width,height,color,fill=false,layer?,frame?}",
+  description: "...",
+  mutates: true,
+  returns: "JSON"
 }
 ```
 
-Console UI chỉ nhận JSON và command đã đăng ký; nó không dùng `eval` và không chạy JavaScript tùy ý. Có thể mở panel bằng API với `await api.ui.settings({ panel: "console" })`.
+## Calling commands
 
-## Lấy đầy đủ file vẽ và app settings hiện tại
-
-`app.state()` trả tổng quan live tương đối nhẹ: trạng thái file, metadata document, **toàn bộ app settings hiện tại**, history, selection, tool và viewport.
-
-```js
-const state = await api.app.state();
-
-state.document; // kích thước, FPS, layer, frame hiện tại, hidden frames, hash
-state.file;     // tên/path .piskel, model version, dirty/saving, hash
-state.settings; // toàn bộ giá trị UserSettings hiện tại
-state.history;  // canUndo, canRedo, index, length
-state.selection;
-state.view;
-```
-
-Pixel là tùy chọn để các command thường không phải tạo payload lớn:
-
-```js
-// Toàn bộ drawing dễ đọc: layers -> frames -> rows[y][x]
-const drawing = await api.document.read({ pixels: "all", format: "rows" });
-
-// Pixel uint32 chính xác, giữ nguyên alpha và gọn hơn string
-const exact = await api.document.read({ pixels: "all", format: "uint32" });
-
-// Chỉ kèm pixel của layer/frame đang chọn
-const current = await api.app.state({
-  includePixels: "current",
-  pixelFormat: "sparse"
-});
-
-// JSON .piskel có thể restore cùng trạng thái file/save
-const file = await api.file.read();
-await api.file.import({ data: file.serialized });
-
-// Snapshot toàn diện: file, settings, palettes và structured pixels
-const snapshot = await api.app.snapshot({
-  includePixels: "all",
-  pixelFormat: "uint32",
-  includeSerialized: true
-});
-```
-
-Mọi giá trị trả về đều JSON-safe và là bản sao. Sửa object đã nhận không làm thay đổi model trong editor.
-
-## Cách gọi command
-
-Ba cách sau tương đương:
+Namespaced, string, and object forms are equivalent:
 
 ```js
 await api.draw.rect({
-  x: 0, y: 0, width: 8, height: 8,
-  color: "#ff0000", fill: true
+  x: 2,
+  y: 2,
+  width: 12,
+  height: 12,
+  color: "#ff004d",
+  fill: true
+});
+
+await api.execute("draw.rect", {
+  x: 2,
+  y: 2,
+  width: 12,
+  height: 12,
+  color: "#ff004d",
+  fill: true
 });
 
 await api.execute({
   command: "draw.rect",
   args: {
-    x: 0, y: 0, width: 8, height: 8,
-    color: "#ff0000", fill: true
+    x: 2,
+    y: 2,
+    width: 12,
+    height: 12,
+    color: "#ff004d",
+    fill: true
   }
-});
-
-await api.execute("draw.rect", {
-  x: 0, y: 0, width: 8, height: 8,
-  color: "#ff0000", fill: true
 });
 ```
 
-Command chạy tuần tự qua một queue. Một command reject không làm kẹt các command sau.
+Commands share a sequential queue. A rejected command does not block later commands.
+
+Run several commands in order with `batch()`:
 
 ```js
 const results = await api.batch([
   { command: "layer.add", args: { name: "Effects" } },
   {
     command: "draw.ellipse",
-    args: { x: 2, y: 2, width: 8, height: 8, color: "#ffffff" }
+    args: {
+      x: 2,
+      y: 2,
+      width: 8,
+      height: 8,
+      color: "#ffffff"
+    }
   }
 ]);
 
 await api.whenIdle();
 ```
 
-`batch` chạy đúng thứ tự, dừng ở lỗi đầu tiên và **không rollback** command đã hoàn thành.
+A batch stops at its first failure. It does not roll back commands that already completed.
 
-## Các nhóm tính năng
+## Complete state
 
-| Nhóm | Command |
+`app.state()` returns a lightweight snapshot of the live editor:
+
+```js
+const state = await api.app.state();
+
+state.document;  // metadata, dimensions, FPS, layers, frames, and hash
+state.file;      // file identity, model version, save status, and hash
+state.settings;  // every current app setting
+state.history;   // undo/redo availability and queue position
+state.selection;
+state.view;
+state.palette;
+```
+
+Pixels and serialized file data are opt-in:
+
+```js
+const currentPixels = await api.app.state({
+  includePixels: "current",
+  pixelFormat: "sparse"
+});
+
+const complete = await api.app.snapshot({
+  includePixels: "all",
+  pixelFormat: "uint32",
+  includeSerialized: true,
+  includePalettes: true
+});
+```
+
+Returned values are detached, JSON-safe copies. Mutating a returned object does not mutate the editor.
+
+Convenience aliases are available:
+
+```js
+await api.getState();
+await api.getDocument();
+await api.getSettings();
+```
+
+## Command groups
+
+| Group | Commands |
 | --- | --- |
-| App/state | `app.state`, `app.snapshot`, `app.capabilities`, `app.changes` |
+| App | `app.state`, `snapshot`, `capabilities`, `changes` |
 | Document | `document.new`, `read`, `state`, `write`, `update`, `resize`, `colors` |
-| File/import/export | `file.state`, `read`, `export`, `import`, `importImage` |
-| Browser storage | `storage.capabilities`, `list`, `save`, `load`, `remove` |
-| Automatic backup | `backup.list`, `snapshots`, `create`, `load`, `remove` |
+| File | `file.state`, `read`, `export`, `import`, `importImage` |
+| Storage | `storage.capabilities`, `list`, `save`, `load`, `remove` |
+| Backup | `backup.list`, `snapshots`, `create`, `load`, `remove` |
 | Layer | `layer.list`, `read`, `select`, `add`, `update`, `remove`, `duplicate`, `mergeDown`, `up`, `down`, `move` |
 | Frame | `frame.list`, `read`, `write`, `select`, `add`, `remove`, `duplicate`, `move`, `toggleVisibility`, `setVisibility` |
-| Vẽ trực tiếp | `draw.pixels`, `line`, `rect`, `ellipse`, `fill`, `clear`, `replaceColor`, `image` |
-| Native tool | `tool.list`, `state`, `select`, `colors`, `swapColors`, `resetColors`, `pick`, `penSize`, `stroke` |
-| Selection/API clipboard | `selection.read`, `state`, `create`, `copy`, `cut`, `paste`, `move`, `erase`, `commit`, `dismiss`, `clipboard` |
+| Direct drawing | `draw.pixels`, `clear`, `line`, `rect`, `ellipse`, `fill`, `replaceColor`, `image` |
+| Native tools | `tool.list`, `state`, `select`, `colors`, `swapColors`, `resetColors`, `pick`, `penSize`, `stroke` |
+| Selection | `selection.read`, `state`, `create`, `copy`, `cut`, `paste`, `move`, `commit`, `erase`, `dismiss`, `clipboard` |
 | Transform | `transform.apply` |
 | Palette | `palette.list`, `state`, `get`, `save`, `import`, `export`, `select`, `remove` |
 | Settings | `settings.read`, `state`, `schema`, `set`, `setMany`, `reset` |
 | History | `history.state`, `undo`, `redo` |
-| Canvas/preview | `view.state`, `zoom`, `pan`, `reset`, `popupPreview` |
+| View | `view.state`, `zoom`, `pan`, `reset`, `popupPreview` |
 | UI | `ui.state`, `settings`, `dialog`, `notify` |
 | Shortcut | `shortcut.list`, `set`, `reset`, `trigger` |
 
-Discovery theo từng nhóm:
+Use `api.help("group")` for current argument and return details instead of relying on a copied static signature.
 
-```js
-console.table(api.help("file"));
-console.table(api.help("settings"));
-console.log((await api.app.capabilities()).limits);
-```
+## Drawing and animation
 
-Mỗi entry từ `help()` cho biết args, mô tả, kiểu kết quả và command có mutate state hay không.
-
-## Tạo và chỉnh sửa animation hoàn chỉnh
+Indexes are zero-based. Layer `0` is the bottom layer, and pixel `(0, 0)` is the top-left corner.
 
 ```js
 await api.document.new({
-  name: "AI robot",
-  description: "Generated through Console API v2",
+  name: "Robot",
+  description: "Created with the Console API",
   width: 32,
   height: 32,
   fps: 8,
@@ -175,36 +212,39 @@ await api.draw.clear({ color: "#222034" });
 await api.layer.select({ layer: 1 });
 await api.frame.select({ frame: 0 });
 await api.draw.rect({
-  x: 8, y: 6, width: 16, height: 20,
-  color: "#5fcde4", fill: true
+  x: 8,
+  y: 6,
+  width: 16,
+  height: 20,
+  color: "#5fcde4",
+  fill: true
 });
-await api.draw.pixels({ pixels: [
-  { x: 12, y: 12, color: "#ffffff" },
-  { x: 19, y: 12, color: "#ffffff" }
-] });
 await api.frame.duplicate({ frame: 0 });
-await api.frame.move({ from: 1, to: 2 });
-await api.frame.setVisibility({ frame: 2, visible: true });
-
-await api.layer.update({ layer: 1, opacity: 0.9, name: "Animated robot" });
-await api.layer.move({ from: 1, to: 0 });
 ```
 
-Index layer/frame bắt đầu từ `0`; layer `0` nằm dưới cùng. Các lệnh draw trực tiếp có thể nhắm tới layer/frame không được chọn mà không đổi selection hiện tại.
+Direct drawing commands can target an unselected `layer` and `frame` without changing the current selection. Their validation completes before pixel data is committed.
 
-## Pixel format và structured round-trip
+### Structured pixels
 
-`frame.read`, `frame.write`, `document.read` và `document.write` hỗ trợ:
+`frame.read`, `frame.write`, `document.read`, and `document.write` support four formats:
 
-- `rows`: `pixels[y][x]`, màu dạng `#RRGGBB`/`rgba(...)`.
-- `flat`: mảng màu row-major.
-- `sparse`: chỉ các pixel có dữ liệu dạng `{x, y, color}`.
-- `uint32`: mảng RGBA integer nội bộ chính xác; phù hợp nhất cho automation lossless.
+| Format | Shape |
+| --- | --- |
+| `rows` | `pixels[y][x]` color strings |
+| `flat` | Row-major color strings |
+| `sparse` | Non-transparent `{x, y, color}` entries |
+| `uint32` | Exact row-major internal RGBA integers |
+
+Use `uint32` for compact, lossless round trips and `sparse` for small patches.
 
 ```js
-const rows = await api.frame.read({ layer: 0, frame: 0 });
-const merged = await api.frame.read({ frame: 0, merged: true });
-const sparse = await api.frame.read({ format: "sparse" });
+const document = await api.document.read({
+  pixels: "all",
+  format: "uint32"
+});
+
+document.name = "Robot copy";
+await api.document.write({ document });
 
 await api.frame.write({
   format: "sparse",
@@ -214,172 +254,77 @@ await api.frame.write({
     { x: 2, y: 1, color: "transparent" }
   ]
 });
-
-const structured = await api.document.read({ format: "uint32" });
-structured.name = "Copy";
-await api.document.write({ document: structured });
 ```
 
-`document.write` kiểm tra toàn bộ payload trước khi thay drawing hiện tại.
+`document.write` validates the complete replacement before changing the current drawing.
 
-## Resize, thay màu và chèn ảnh
+### Native tools and transforms
 
-Resize hỗ trợ chín anchor như UI và nearest-neighbor content scaling:
-
-```js
-await api.document.resize({
-  width: 64,
-  height: 48,
-  resizeContent: false,
-  origin: "MIDDLE"
-});
-
-await api.document.resize({
-  width: 128,
-  height: 96,
-  resizeContent: true
-});
-
-await api.draw.replaceColor({
-  from: "#5fcde4",
-  to: "#639bff",
-  scope: "document"
-});
-
-await api.draw.image({
-  data: "data:image/png;base64,...",
-  x: 0,
-  y: 0,
-  width: 16,
-  height: 16,
-  smoothing: false
-});
-```
-
-Tọa độ là pixel nguyên, gốc `(0, 0)` ở trên trái. Shape trực tiếp reject tọa độ ngoài canvas thay vì âm thầm clip.
-
-## Dùng mọi native drawing tool và transform
+Use `tool.stroke` when native tool behavior matters:
 
 ```js
 const tools = await api.tool.list();
-console.log(tools.drawing, tools.transforms);
 
 await api.tool.select({ id: "tool-vertical-mirror-pen" });
 await api.tool.colors({ primary: "#ffcc00", secondary: "transparent" });
 await api.tool.penSize({ size: 2 });
 await api.tool.stroke({
-  points: [{ x: 4, y: 4 }, { x: 8, y: 12 }]
+  points: [
+    { x: 4, y: 4 },
+    { x: 8, y: 12 }
+  ]
 });
 
-await api.tool.pick({ x: 4, y: 4, target: "secondary" });
-await api.tool.swapColors();
-
-await api.transform.apply({
-  id: "tool-flip",
-  shiftKey: true,
-  ctrlKey: false,
-  altKey: false
-});
+await api.transform.apply({ id: "tool-flip", shiftKey: true });
 ```
 
-`tool.stroke` chạy native press → move → release bằng tọa độ sprite. Nó hỗ trợ pen, mirror pen, bucket, color swap, eraser, line, rectangle, circle, move, mọi selection tool, lighten, dithering và color picker. `button: 2` dùng secondary color. Modifier giữ nguyên scope semantics của UI; `ctrlKey` cũng được ánh xạ sang Command trên macOS khi transform.
+`tool.stroke` follows the native press, move, and release lifecycle. Do not run it while the user is performing an active pointer gesture.
 
-Không chạy native API stroke đồng thời với pointer gesture thật của người dùng.
+## Settings
 
-## Selection và API clipboard biệt lập
-
-```js
-await api.selection.create({ x: 4, y: 4, width: 8, height: 8 });
-await api.selection.copy();
-await api.selection.move({ dx: 4, dy: 0, moveContent: true });
-await api.selection.paste({ offsetX: 0, offsetY: 8, clip: true });
-await api.selection.commit();
-
-console.log(await api.selection.state());
-console.log(await api.selection.clipboard());
-```
-
-API clipboard nằm trong memory và tách khỏi clipboard hệ điều hành. Nhờ đó automation có tính xác định và không cần browser clipboard permission.
-
-## Palette
+Read all settings or inspect the writable schema:
 
 ```js
-const palette = await api.palette.save({
-  name: "Robot",
-  colors: ["#222034", "#5fcde4", "#ffffff"]
-});
-await api.palette.select({ id: palette.id });
-
-const gpl = await api.palette.export({ id: palette.id, format: "gpl" });
-await api.palette.import({ name: "Robot copy", data: gpl, format: "gpl" });
-```
-
-Import/export hỗ trợ JSON, chuẩn GIMP GPL và danh sách hex. Palette được lưu trong `localStorage`, không nhúng vào `.piskel` và không thuộc document undo history. Palette động như “Current colors” chỉ đọc.
-
-## Đọc và ghi toàn bộ app settings
-
-`settings.schema()` trả mọi setting có thể ghi cùng giá trị hiện tại, default, type, allowed values và range.
-
-```js
-console.table(await api.settings.schema());
+const values = await api.settings.read();
+const schema = await api.settings.schema();
 
 await api.settings.set({ key: "GRID_ENABLED", value: true });
-await api.settings.setMany({ values: {
-  GRID_COLOR: "#ffffff",
-  GRID_WIDTH: 2,
-  GRID_SPACING: 8,
-  CANVAS_BACKGROUND: "light-canvas-background",
-  ONION_SKIN: true,
-  SEAMLESS_MODE: false,
-  PREVIEW_SIZE: "best",
-  MAX_FPS: 30,
-  DEFAULT_SIZE: { width: 64, height: 64 },
-  PEN_SIZE: 3
-} });
+await api.settings.setMany({
+  values: {
+    GRID_COLOR: "#ffffff",
+    GRID_SPACING: 8,
+    DEFAULT_SIZE: { width: 64, height: 64 },
+    ONION_SKIN: true,
+    PEN_SIZE: 3
+  }
+});
 
 await api.settings.reset({ key: "GRID_ENABLED" });
-// Reset toàn bộ app settings:
-await api.settings.reset();
 ```
 
-`settings.setMany` validate tất cả giá trị trước rồi mới áp dụng. Vì vậy lỗi validation không để lại một phần settings đã đổi.
+`settings.setMany` validates every supplied value before applying any of them. Shortcut mappings use the separate `shortcut` group.
 
-Các setting hiện hỗ trợ gồm grid, preview/tile, onion skin/layer preview, background, palette đang chọn, export, pen size, resize defaults, color format và tab UI. Shortcut mapping có API riêng ở nhóm `shortcut.*`.
+## Import, export, and persistence
 
-## Import và export mọi định dạng của app
+Export formats are `piskel`, `png`, `gif`, `zip`, `pixi`, and `c`:
 
 ```js
-const piskel = await api.file.export({ format: "piskel" });
+const file = await api.file.read();
 const png = await api.file.export({
   format: "png",
   scale: 4,
   columns: 4,
   visibleOnly: true
 });
-const oneFrame = await api.file.export({ format: "png", frame: 0, scale: 8 });
 const gif = await api.file.export({ format: "gif", scale: 4, repeat: true });
-const zip = await api.file.export({
-  format: "zip",
-  splitLayers: true,
-  useLayerNames: true,
-  prefix: "walk_"
-});
 const pixi = await api.file.export({ format: "pixi", columns: 4 });
-const cSource = await api.file.export({ format: "c" });
 
-// Thêm download: true để dùng browser download flow.
-await api.file.export({ format: "png", download: true, name: "robot" });
+await api.file.import({ data: file.serialized });
 ```
 
-Kiểu kết quả:
+Set `download: true` to invoke the browser download flow. Binary exports return data URLs; Pixi export returns `{image, json}`.
 
-- `piskel`, `c`: string.
-- `png`, `gif`, `zip`: data URL.
-- `pixi`: `{ image: dataURL, json: object }`.
-
-PNG/Pixi/GIF có thể chọn `frame`, `frames`, `visibleOnly`, `layer`, `columns` và `scale` khi phù hợp. Spritesheet scale theo từng cell để metadata Pixi luôn khớp chính xác pixel output.
-
-Image import nhận base64 PNG, JPEG, BMP, WebP, animated GIF và spritesheet:
+Image import accepts base64 PNG, JPEG, BMP, WebP, animated GIF, and spritesheet data URLs:
 
 ```js
 await api.file.importImage({
@@ -387,127 +332,119 @@ await api.file.importImage({
   mode: "spritesheet",
   name: "Walk",
   frameWidth: 16,
-  frameHeight: 16,
-  offsetX: 0,
-  offsetY: 0,
-  smoothing: false
+  frameHeight: 16
 });
 ```
 
-URL ngoài bị từ chối có chủ đích. Trusted automation nên tự fetch rồi truyền data URL.
+Remote image URLs are intentionally rejected. Fetch trusted data separately and provide a data URL.
 
-## Browser save, gallery và automatic backup
+Browser persistence and backup commands use the editor's existing services:
 
 ```js
 await api.storage.save({ target: "browser", name: "Robot" });
-console.table(await api.storage.list());
+const saved = await api.storage.list();
 await api.storage.load({ name: "Robot" });
 await api.storage.remove({ name: "Robot" });
 
 const sessions = await api.backup.list();
-const snapshots = await api.backup.snapshots({ sessionId: sessions[0].id });
-await api.backup.load({ snapshotId: snapshots[0].id });
 ```
 
-Các save target:
+Available save targets are `browser`, `download`, `desktop`, and `gallery`. Desktop and gallery depend on the running build and authentication state; inspect `storage.capabilities()` first.
 
-- `browser`: IndexedDB của app.
-- `download`: browser file download.
-- `desktop`: chỉ NW.js desktop build.
-- `gallery`: chỉ khi người dùng đã đăng nhập.
+## Selection and API clipboard
 
-`storage.capabilities()` cho biết target thực sự khả dụng. API cũng đọc/xóa dữ liệu `legacy` localStorage. Native open-file picker vẫn cần thao tác/quyền của người dùng; dùng `file.import` để automation có tính xác định.
+The API clipboard is in memory and does not require operating-system clipboard permission:
 
-## View, UI và shortcut
+```js
+await api.selection.create({ x: 4, y: 4, width: 8, height: 8 });
+await api.selection.copy();
+await api.selection.move({ dx: 4, dy: 0, moveContent: true });
+await api.selection.paste({ offsetX: 0, offsetY: 8, clip: true });
+await api.selection.commit();
+```
+
+## UI automation
 
 ```js
 await api.view.zoom({ value: 16 });
 await api.view.pan({ dx: 2, dy: -1 });
 await api.view.reset();
 
-await api.ui.settings({ panel: "export" });
+await api.ui.settings({ panel: "console" });
 await api.ui.settings({ panel: null });
 await api.ui.dialog({ id: "cheatsheet" });
 await api.ui.dialog({ open: false });
-await api.ui.notify({ message: "Automation complete", hideDelay: 2000 });
-
-console.table(await api.shortcut.list());
-await api.shortcut.set({ id: "tool-pen", key: "Q" });
-await api.shortcut.trigger({ id: "tool-pen" });
-await api.shortcut.reset({ id: "tool-pen" });
+await api.ui.notify({ message: "Done", hideDelay: 2000 });
 ```
 
-`ui.settings` hỗ trợ `user`, `resize`, `save`, `export`, `import`, `localstorage`, `console` hoặc `null`. Detached preview dùng `window.open`, do đó browser có thể chặn nếu lệnh không gắn với user gesture.
+`ui.settings` accepts `user`, `resize`, `save`, `export`, `import`, `localstorage`, `console`, or `null`. Popup windows and native file or clipboard prompts remain subject to browser permissions.
 
-## Theo dõi thay đổi live
+## Change events
 
-API giữ change log có giới hạn và hỗ trợ subscription trực tiếp. Thay đổi từ cả UI lẫn API đều được quan sát.
+The API exposes a bounded change log and live subscriptions. Events caused through either the normal UI or the API are observable.
 
 ```js
 const initial = await api.app.state();
 
 const unsubscribe = api.on("document", event => {
-  console.log(event.revision, event.type, event.details);
+  console.log(event.revision, event.details);
 });
 
-await api.draw.pixels({ pixels: [{ x: 0, y: 0, color: "#ff0000" }] });
-console.log(await api.app.changes({ since: initial.revision }));
+await api.draw.pixels({
+  pixels: [{ x: 0, y: 0, color: "#ff0000" }]
+});
+
+const changes = await api.app.changes({ since: initial.revision });
 unsubscribe();
 
-// Helper trực tiếp, không chiếm command queue.
-const nextChange = await api.waitForChange({
+const nextSettingsChange = await api.waitForChange({
   since: initial.revision,
   type: "settings",
   timeout: 30000
 });
 ```
 
-Event type hỗ trợ: `document`, `settings`, `history`, `selection`, `palette`, `tool`, `view`, `save`, `ui`, cùng catch-all `change`. Ngoài ra có `api.once`, `api.off` và `api.destroy`.
+Event types are `document`, `settings`, `history`, `selection`, `palette`, `tool`, `view`, `save`, and `ui`, plus the catch-all `change` event. Lifecycle helpers include `on`, `off`, `once`, `waitForChange`, and `destroy`.
 
-## Playwright / browser automation
+## Browser automation
 
 ```js
-await page.waitForFunction(() => !!window.piskelAPI);
-
-const state = await page.evaluate(() => window.piskelAPI.app.state());
+await page.waitForFunction(() => Boolean(window.piskelAPI));
 
 const result = await page.evaluate(async () => {
   const api = window.piskelAPI;
   await api.document.new({ width: 16, height: 16 });
   await api.draw.rect({
-    x: 2, y: 2, width: 12, height: 12,
-    color: "#ff004d", fill: true
+    x: 2,
+    y: 2,
+    width: 12,
+    height: 12,
+    color: "#ff004d",
+    fill: true
   });
   return api.document.read({ pixels: "current", format: "sparse" });
 });
 ```
 
-API chỉ thực thi command đã đăng ký. Nó không dùng `eval`, không trả mutable app model, không mở HTTP/WebSocket server và không nhận cross-origin `postMessage`. Đây là browser console/automation API, không phải REST hay MCP server.
+For a workflow optimized for AI agents, see [`SKILL.md`](../SKILL.md).
 
-## Thứ tự, undo và giới hạn
+## Safety and limits
 
-- Direct draw/frame write là atomic và tạo một undo snapshot cho mỗi command.
-- Native stroke/transform dùng đúng history behavior của app.
-- Metadata, palette, preference, shortcut mapping và viewport không phải pixel-history operation.
-- Import và history command chờ decode/restore bất đồng bộ trước khi queue tiếp tục.
-- Kích thước tối đa: `2048`; tối đa `256` layer, `10.000` frame và `16.777.216` tổng pixel layer × frame.
-- Một batch có tối đa `1.000` command.
-- Image và `.piskel` import giới hạn 64 MiB data; export lớn có canvas-size guard.
-- OS clipboard và native file picker vẫn phụ thuộc browser/user permission. Dùng `selection.*`, data URL, `file.import` và dữ liệu export trả về cho automation xác định.
+- Only registered commands are executable; the API has no `eval` path.
+- Commands do not expose mutable private editor objects.
+- There is no HTTP server, WebSocket listener, or cross-origin `postMessage` bridge.
+- A direct draw or frame-write command creates one undo snapshot.
+- Import and history commands wait for asynchronous decode or restore work.
+- Maximum dimensions: `2048 x 2048`.
+- Maximum layers: `256`; maximum frames: `10,000`.
+- Maximum total layer-frame pixels: `16,777,216`.
+- Maximum batch length: `1,000` commands.
+- Image and `.piskel` inputs are limited to 64 MiB.
+- Large image exports have canvas-dimension and total-pixel guards.
 
-## Tương thích v1
+Use `api.capabilities().limits` as the runtime source of truth.
 
-Mọi command v1 và default behavior của chúng vẫn hoạt động. Các bổ sung chính ở v2 gồm `state.document`, `state.file`, `state.settings`, structured pixel read/write đầy đủ, mọi app setting, mọi export format, image import, persistence/backup, selection clipboard, view/UI/shortcut control và live change event.
-
-Các alias tiện dụng:
-
-```js
-await api.getState();
-await api.getDocument();
-await api.getSettings();
-```
-
-## Kiểm thử
+## Testing
 
 ```sh
 node --test tests/api/console-api.test.cjs
@@ -516,4 +453,4 @@ npm run lint
 npm run build
 ```
 
-Node tests dùng model/controller thật với browser/UI fake. Playwright tests chạy app thật để kiểm tra undo/redo, structured/file round-trip, native tool, palette, settings, selection, IndexedDB persistence, export và input không hợp lệ.
+The Node suite covers API validation and model behavior. The Playwright suite covers integration with the running editor and the built-in command panel.

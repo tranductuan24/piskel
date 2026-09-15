@@ -1,96 +1,87 @@
-Piskel 
-======
+# Piskel
 
 [![E2E Tests](https://github.com/piskelapp/piskel/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/piskelapp/piskel/actions/workflows/ci.yml)
 
-Piskel is an easy-to-use sprite editor. It can be used to create game sprites, animations, pixel-art...
-It is the editor used in **[piskelapp.com](https://www.piskelapp.com)**.
+Piskel is a browser-based editor for pixel art, game sprites, and frame-by-frame animation. It powers [piskelapp.com](https://www.piskelapp.com).
 
 <img
   src="https://screenletstore.appspot.com/img/95aaa0f0-37a4-11e7-a652-7b8128ce3e3b.png"
-  title="Piskel editor screenshot"
+  alt="Piskel editor"
   width="500">
 
-## About Piskel
+## Features
 
-### Built with
+- Pixel drawing tools, selections, transforms, palettes, layers, and frames
+- Animated preview with configurable FPS, onion skinning, and tile preview
+- Piskel, PNG spritesheet, animated GIF, ZIP, PixiJS, and C export
+- Image, GIF, spritesheet, and `.piskel` import
+- Browser storage, automatic backups, and offline desktop builds
+- A built-in Console API for automation and AI-assisted workflows
 
-The Piskel editor is purely built in **JavaScript, HTML and CSS**.
+## Console API
 
-We also use the following **libraries** :
-* [spectrum](https://github.com/bgrins/spectrum) : awesome standalone colorpicker
-* [gifjs](https://jnordberg.github.io/gif.js/) : generate animated GIFs in javascript, using webworkers
-* [supergif](https://github.com/buzzfeed/libgif-js) : modified version of SuperGif to parse and import GIFs
-* [jszip](https://github.com/Stuk/jszip) : create, read and edit .zip files with Javascript
-* [canvas-toBlob](https://github.com/eligrey/canvas-toBlob.js/) : shim for canvas toBlob
-* [jquery](https://jquery.com/) : used sporadically in the application
-* [bootstrap-tooltip](https://getbootstrap.com/javascript/#tooltips) : nice tooltips
-* [playwright](https://playwright.dev/): End to end testing
+Piskel exposes `window.piskelAPI` v2 after the editor starts. The API provides complete drawing and file state, app settings, validated editing commands, import/export, persistence, UI control, and live change events.
 
-As well as some **icons** from the [Noun Project](https://thenounproject.com/) :
-* Folder by Simple Icons from The Noun Project
-* (and probably one or two others)
+Open **`>_ API`** in the right toolbar to run JSON commands without DevTools, or use the API from browser automation:
 
-### Browser Support
+```js
+const api = window.piskelAPI;
+console.table(api.help());
 
-Piskel supports the following browsers:
-* **Chrome** (latest)
-* **Firefox** (latest)
-* **Edge** (latest)
-* **Brave** (latest) but **only if canvas fingerprinting is disabled** ([more info](https://github.com/piskelapp/piskel/wiki/About-canvas%E2%80%90based-browser-fingerprinting-and-Brave-browser))
+await api.draw.pixels({
+  pixels: [{ x: 0, y: 0, color: "#ff004d" }]
+});
+```
 
-### Mobile/Tablets
+- [Console API reference](docs/console-api.md)
+- [AI agent skill](SKILL.md)
 
-There is no support for mobile.
+The command runner only dispatches registered commands; it does not use `eval`.
 
-### Offline builds
+## Browser support
 
-Offline builds are available. More details in the [dedicated wiki page](https://github.com/piskelapp/piskel/wiki/Desktop-applications).
+Piskel supports current versions of Chrome, Firefox, and Edge. Brave works when canvas fingerprinting protection is disabled; see the [Brave compatibility note](https://github.com/piskelapp/piskel/wiki/About-canvas%E2%80%90based-browser-fingerprinting-and-Brave-browser).
 
-### Console / AI automation API
+Mobile and tablet layouts are not supported.
 
-The editor exposes `window.piskelAPI` v2 for complete drawing/file state,
-app settings, drawing, import/export, persistence, frames, layers, palettes,
-native tools, selections, transformations, view/UI control and live events.
-Open the built-in **`>_ API`** panel to run commands without DevTools, or use
-`piskelAPI.help()` / `piskelAPI.capabilities()` from browser automation. See the
-[Console API documentation and examples](docs/console-api.md).
+## Development
 
-## Contributing ?
+Install dependencies and start the editor:
 
-### Reporting an issue
+```sh
+npm ci
+npm start
+```
 
-Found a problem when using the application, want to request a feature, [open an issue](https://github.com/piskelapp/piskel/issues).
- 
-### About PR contributions
+Useful commands:
 
-#### PR Contributions we accept
-- Small, straightforward fixes (documentation updates, typos, incorrect strings, minor bugs): only a few words or lines.
+| Command | Purpose |
+| --- | --- |
+| `npm run start:test` | Build and serve in integration-test mode |
+| `npm run lint` | Check source files with Biome |
+| `npm run build` | Create the production build in `dest/prod` |
+| `npm run unit-tests` | Run Karma unit tests |
+| `npm run e2e` | Run Playwright end-to-end tests |
+| `node --test tests/api/console-api.test.cjs` | Run Console API integration tests |
 
-#### PR Contributions we are unlikely to merge/review
-- Large or complex bug fixes that are spread across multiple areas of the codebase
-- Major refactors that require significant testing, validation, or architectural discussion
-- Pull requests that modify the user experience or introduce new features
+Playwright requires its browser binary. Install it with `npx playwright install chromium` when it is not already available.
 
-You are still welcome to open a PR, but please note that complex or UX-impacting changes are unlikely to be reviewed or merged due to limited time and resources.
+See the [project wiki](https://github.com/piskelapp/piskel/wiki) for additional development and desktop-build information.
 
-### Setting up Development environment
-Have a look at the [wiki](https://github.com/piskelapp/piskel/wiki) to set up the development environment.
+## Technology
 
+The editor is built with JavaScript, HTML, and CSS. Its browser-side dependencies include jQuery, gif.js, a modified SuperGif decoder, JSZip, Spectrum, and canvas-toBlob. End-to-end tests use Playwright.
 
+Several interface icons come from [The Noun Project](https://thenounproject.com/), including the Folder icon by Simple Icons.
+
+## Contributing
+
+Use [GitHub Issues](https://github.com/piskelapp/piskel/issues) for bug reports and feature requests.
+
+Small, focused fixes and documentation improvements are the easiest contributions to review. Large or complex fixes, major refactors, and user-experience changes are unlikely to be reviewed or merged because the project has limited maintenance capacity.
 
 ## License
 
-Copyright 2017 Julian Descottes
+Copyright 2017 Julian Descottes.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+Licensed under the [Apache License 2.0](LICENSE).
